@@ -1,0 +1,94 @@
+[gd_scene load_steps=19 format=3 uid="uid://n6444fbllu4i"]
+
+[ext_resource type="Script" uid="uid://ds2l1b46mgtlt" path="res://main.gd" id="1_272bh"]
+[ext_resource type="Script" uid="uid://cdu5tlyk72uu4" path="res://addons/gecs/ecs/world.gd" id="1_ig7tw"]
+[ext_resource type="Script" uid="uid://cf84mkp0nv2mk" path="res://addons/gecs/io/serialize_config.gd" id="2_0xm2m"]
+[ext_resource type="Script" uid="uid://cq2cqs6s8p1mp" path="res://Systems/s_movement.gd" id="3_1bvp3"]
+[ext_resource type="Script" uid="uid://ccpfjrjdwynkq" path="res://Systems/s_gravity.gd" id="3_7mycd"]
+[ext_resource type="PackedScene" uid="uid://7g7sy7y2bm3e" path="res://Entities/e_player.tscn" id="3_h2yge"]
+[ext_resource type="Script" uid="uid://wbui7dw8eveb" path="res://Systems/s_input_player.gd" id="4_272bh"]
+[ext_resource type="Script" uid="uid://d0xqaruenk806" path="res://Systems/s_jump.gd" id="7_dg77c"]
+[ext_resource type="Script" uid="uid://dvwp6egk8sdf0" path="res://Systems/s_camera_follow.gd" id="8_efxa6"]
+[ext_resource type="PackedScene" uid="uid://cxte158xtdayl" path="res://Entities/e_camera.tscn" id="9_4c57u"]
+[ext_resource type="Script" uid="uid://ccvwrcod07qie" path="res://Systems/s_input_camera.gd" id="9_dg77c"]
+[ext_resource type="Script" uid="uid://cmmb45jshhcvf" path="res://Systems/s_entity_rotation.gd" id="10_ycdy4"]
+[ext_resource type="Texture2D" uid="uid://dic6s3qicaaux" path="res://skybox/skybox_image_space_1.png" id="13_w48qg"]
+
+[sub_resource type="Resource" id="Resource_7mycd"]
+script = ExtResource("2_0xm2m")
+metadata/_custom_type_script = "uid://cf84mkp0nv2mk"
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_vivmo"]
+panorama = ExtResource("13_w48qg")
+
+[sub_resource type="Sky" id="Sky_2cqfq"]
+sky_material = SubResource("PanoramaSkyMaterial_vivmo")
+
+[sub_resource type="Environment" id="Environment_yaehf"]
+background_mode = 2
+sky = SubResource("Sky_2cqfq")
+ambient_light_source = 3
+
+[sub_resource type="BoxMesh" id="BoxMesh_272bh"]
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_272bh")
+
+[node name="World" type="Node" parent="."]
+script = ExtResource("1_ig7tw")
+entity_nodes_root = NodePath("Entities")
+system_nodes_root = NodePath("Systems")
+default_serialize_config = SubResource("Resource_7mycd")
+metadata/_custom_type_script = "uid://cdu5tlyk72uu4"
+
+[node name="Systems" type="Node" parent="World"]
+
+[node name="InputPlayerSystem" type="Node" parent="World/Systems"]
+script = ExtResource("4_272bh")
+metadata/_custom_type_script = "uid://wbui7dw8eveb"
+
+[node name="JumpSystem" type="Node" parent="World/Systems"]
+script = ExtResource("7_dg77c")
+metadata/_custom_type_script = "uid://d0xqaruenk806"
+
+[node name="GravitySystem" type="Node" parent="World/Systems"]
+script = ExtResource("3_7mycd")
+metadata/_custom_type_script = "uid://ccpfjrjdwynkq"
+
+[node name="MovementSystem" type="Node" parent="World/Systems"]
+script = ExtResource("3_1bvp3")
+metadata/_custom_type_script = "uid://cq2cqs6s8p1mp"
+
+[node name="CameraFollowSystem" type="Node" parent="World/Systems"]
+script = ExtResource("8_efxa6")
+metadata/_custom_type_script = "uid://dvwp6egk8sdf0"
+
+[node name="CameraInputSystem" type="Node" parent="World/Systems"]
+script = ExtResource("9_dg77c")
+metadata/_custom_type_script = "uid://ccvwrcod07qie"
+
+[node name="EntityRotationSystem" type="Node" parent="World/Systems"]
+script = ExtResource("10_ycdy4")
+metadata/_custom_type_script = "uid://cmmb45jshhcvf"
+
+[node name="Entities" type="Node" parent="World"]
+
+[node name="Player" parent="World/Entities" instance=ExtResource("3_h2yge")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6504784, 3.2583947, 1.7032572)
+id = "PlayerMain"
+
+[node name="Camera" parent="World/Entities" instance=ExtResource("9_4c57u")]
+transform = Transform3D(0.82894975, 0, 0.5593232, 0, 1, 0, -0.5593232, 0, 0.82894975, 6.1914344, 4.3146253, 7.1699257)
+id = "CameraMain"
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_yaehf")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.71654445, -0.58691376, 0.37695667, -0.00048699902, 0.5399865, 0.8416735, -0.6975413, -0.6032801, 0.3866385, 0, 0, 0)
+shadow_enabled = true
+
+[node name="CSGMesh3D" type="CSGMesh3D" parent="."]
+transform = Transform3D(59.610962, 0, 0, 0, 1.0130281, 0, 0, 0, 63.478703, 0, 0, 0)
+use_collision = true
+mesh = SubResource("BoxMesh_272bh")

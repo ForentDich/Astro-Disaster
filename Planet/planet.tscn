@@ -1,0 +1,173 @@
+[gd_scene load_steps=19 format=3 uid="uid://cervbo06tay0k"]
+
+[ext_resource type="Texture2D" uid="uid://dic6s3qicaaux" path="res://skybox/skybox_image_space_1.png" id="1_06kw6"]
+[ext_resource type="Script" uid="uid://dykysrvhtdu1d" path="res://Planet/Planet.cs" id="1_m2dqj"]
+[ext_resource type="Resource" uid="uid://ddsa7axgu6bsl" path="res://Planet/planeta1.tres" id="2_0v15i"]
+[ext_resource type="Script" uid="uid://0alln52ean3" path="res://Planet/player_t.gd" id="4_b00i1"]
+[ext_resource type="Shader" uid="uid://d7y77y7jo0s2" path="res://Planet/terrain.gdshader" id="4_x7wbh"]
+[ext_resource type="Script" uid="uid://cr3myg0s3hm1p" path="res://Planet/PlanetFace.cs" id="6_7iu0o"]
+[ext_resource type="Shader" uid="uid://l2q54tbi3u0e" path="res://Planet/water.gdshader" id="6_pq8jx"]
+
+[sub_resource type="PanoramaSkyMaterial" id="PanoramaSkyMaterial_m2dqj"]
+panorama = ExtResource("1_06kw6")
+
+[sub_resource type="Sky" id="Sky_48u6g"]
+sky_material = SubResource("PanoramaSkyMaterial_m2dqj")
+
+[sub_resource type="Environment" id="Environment_0v15i"]
+background_mode = 2
+sky = SubResource("Sky_48u6g")
+ambient_light_source = 3
+
+[sub_resource type="BoxMesh" id="BoxMesh_0v15i"]
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_b00i1"]
+
+[sub_resource type="Gradient" id="Gradient_pq8jx"]
+interpolation_mode = 1
+offsets = PackedFloat32Array(0, 0.375, 0.5241935, 0.5967742)
+colors = PackedColorArray(0.98455304, 0.7267717, 0.42329922, 1, 0.3074, 0.53, 0.05300001, 1, 0.20664245, 0.20534483, 0.090927206, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_7iu0o"]
+gradient = SubResource("Gradient_pq8jx")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_25xyv"]
+render_priority = 0
+shader = ExtResource("4_x7wbh")
+shader_parameter/specular = 0.5
+shader_parameter/roughness = 0.8
+shader_parameter/radius = 50.0
+shader_parameter/height = 5.5
+shader_parameter/gradient = SubResource("GradientTexture1D_7iu0o")
+
+[sub_resource type="Gradient" id="Gradient_7iu0o"]
+offsets = PackedFloat32Array(0, 0.26612905, 1)
+colors = PackedColorArray(0.5062731, 0.7320707, 1, 1, 0.16907269, 0.1781901, 0.5492804, 1, 0.0030368487, 0, 0.13937739, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_yd76d"]
+gradient = SubResource("Gradient_7iu0o")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_32fef"]
+render_priority = 0
+shader = ExtResource("6_pq8jx")
+shader_parameter/specular = 0.9
+shader_parameter/roughness = 0.3
+shader_parameter/radius = 9.4
+shader_parameter/level = 10.0
+shader_parameter/gradient = SubResource("GradientTexture1D_yd76d")
+
+[node name="Planet" type="Node3D" node_paths=PackedStringArray("PlayerNode")]
+script = ExtResource("1_m2dqj")
+Data = ExtResource("2_0v15i")
+PlayerNode = NodePath("CharacterBody3D")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_0v15i")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.71654445, -0.58691376, 0.37695667, -0.00048699902, 0.5399865, 0.8416735, -0.6975413, -0.6032801, 0.3866385, 0, 0, 0)
+shadow_enabled = true
+
+[node name="Node3D" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 555.759, 0)
+
+[node name="CharacterBody3D" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 566.2534, 0)
+script = ExtResource("4_b00i1")
+speed = 30.0
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="CharacterBody3D"]
+mesh = SubResource("BoxMesh_0v15i")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="CharacterBody3D"]
+shape = SubResource("SphereShape3D_b00i1")
+
+[node name="Camera3D" type="Camera3D" parent="CharacterBody3D"]
+
+[node name="Top_Land" type="MeshInstance3D" parent="." node_paths=PackedStringArray("PlayerNode")]
+material_override = SubResource("ShaderMaterial_25xyv")
+script = ExtResource("6_7iu0o")
+Data = ExtResource("2_0v15i")
+PlayerNode = NodePath("../CharacterBody3D")
+
+[node name="Bottom_Land" type="MeshInstance3D" parent="." node_paths=PackedStringArray("PlayerNode")]
+material_override = SubResource("ShaderMaterial_25xyv")
+script = ExtResource("6_7iu0o")
+FaceNormal = Vector3(0, -1, 0)
+Data = ExtResource("2_0v15i")
+PlayerNode = NodePath("../CharacterBody3D")
+
+[node name="Left_Land" type="MeshInstance3D" parent="." node_paths=PackedStringArray("PlayerNode")]
+material_override = SubResource("ShaderMaterial_25xyv")
+script = ExtResource("6_7iu0o")
+FaceNormal = Vector3(-1, 0, 0)
+Data = ExtResource("2_0v15i")
+PlayerNode = NodePath("../CharacterBody3D")
+
+[node name="Right_Land" type="MeshInstance3D" parent="." node_paths=PackedStringArray("PlayerNode")]
+material_override = SubResource("ShaderMaterial_25xyv")
+script = ExtResource("6_7iu0o")
+FaceNormal = Vector3(1, 0, 0)
+Data = ExtResource("2_0v15i")
+PlayerNode = NodePath("../CharacterBody3D")
+
+[node name="Front_Land" type="MeshInstance3D" parent="." node_paths=PackedStringArray("PlayerNode")]
+material_override = SubResource("ShaderMaterial_25xyv")
+script = ExtResource("6_7iu0o")
+FaceNormal = Vector3(0, 0, -1)
+Data = ExtResource("2_0v15i")
+PlayerNode = NodePath("../CharacterBody3D")
+
+[node name="Back_Land" type="MeshInstance3D" parent="." node_paths=PackedStringArray("PlayerNode")]
+material_override = SubResource("ShaderMaterial_25xyv")
+script = ExtResource("6_7iu0o")
+FaceNormal = Vector3(0, 0, 1)
+Data = ExtResource("2_0v15i")
+PlayerNode = NodePath("../CharacterBody3D")
+
+[node name="Top_Ocean" type="MeshInstance3D" parent="." node_paths=PackedStringArray("PlayerNode")]
+material_override = SubResource("ShaderMaterial_32fef")
+script = ExtResource("6_7iu0o")
+Data = ExtResource("2_0v15i")
+IsOcean = true
+PlayerNode = NodePath("../CharacterBody3D")
+
+[node name="Bottom_Ocean" type="MeshInstance3D" parent="." node_paths=PackedStringArray("PlayerNode")]
+material_override = SubResource("ShaderMaterial_32fef")
+script = ExtResource("6_7iu0o")
+FaceNormal = Vector3(0, -1, 0)
+Data = ExtResource("2_0v15i")
+IsOcean = true
+PlayerNode = NodePath("../CharacterBody3D")
+
+[node name="Left_Ocean" type="MeshInstance3D" parent="." node_paths=PackedStringArray("PlayerNode")]
+material_override = SubResource("ShaderMaterial_32fef")
+script = ExtResource("6_7iu0o")
+FaceNormal = Vector3(-1, 0, 0)
+Data = ExtResource("2_0v15i")
+IsOcean = true
+PlayerNode = NodePath("../CharacterBody3D")
+
+[node name="Right_Ocean" type="MeshInstance3D" parent="." node_paths=PackedStringArray("PlayerNode")]
+material_override = SubResource("ShaderMaterial_32fef")
+script = ExtResource("6_7iu0o")
+FaceNormal = Vector3(1, 0, 0)
+Data = ExtResource("2_0v15i")
+IsOcean = true
+PlayerNode = NodePath("../CharacterBody3D")
+
+[node name="Front_Ocean" type="MeshInstance3D" parent="." node_paths=PackedStringArray("PlayerNode")]
+material_override = SubResource("ShaderMaterial_32fef")
+script = ExtResource("6_7iu0o")
+FaceNormal = Vector3(0, 0, -1)
+Data = ExtResource("2_0v15i")
+IsOcean = true
+PlayerNode = NodePath("../CharacterBody3D")
+
+[node name="Back_Ocean" type="MeshInstance3D" parent="." node_paths=PackedStringArray("PlayerNode")]
+material_override = SubResource("ShaderMaterial_32fef")
+script = ExtResource("6_7iu0o")
+FaceNormal = Vector3(0, 0, 1)
+Data = ExtResource("2_0v15i")
+IsOcean = true
+PlayerNode = NodePath("../CharacterBody3D")

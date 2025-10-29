@@ -1,0 +1,13 @@
+[gd_scene load_steps=5 format=3 uid="uid://cxte158xtdayl"]
+
+[ext_resource type="Script" uid="uid://doomomflud2mb" path="res://Entities/e_camera.gd" id="1_6lpwt"]
+[ext_resource type="Script" uid="uid://b6k13gc2m4e5s" path="res://addons/gecs/ecs/component.gd" id="2_p1fho"]
+[ext_resource type="Script" uid="uid://1v6s0f2418hd" path="res://Components/c_orbital_camera.gd" id="4_xg8ux"]
+
+[sub_resource type="Resource" id="Resource_8ygsm"]
+script = ExtResource("4_xg8ux")
+metadata/_custom_type_script = "uid://1v6s0f2418hd"
+
+[node name="Camera" type="Camera3D"]
+script = ExtResource("1_6lpwt")
+component_resources = Array[ExtResource("2_p1fho")]([SubResource("Resource_8ygsm")])

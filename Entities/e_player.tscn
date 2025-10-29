@@ -1,0 +1,42 @@
+[gd_scene load_steps=13 format=3 uid="uid://7g7sy7y2bm3e"]
+
+[ext_resource type="Script" uid="uid://bia2xbqtnycma" path="res://Entities/e_player.gd" id="1_hk06b"]
+[ext_resource type="Script" uid="uid://b6k13gc2m4e5s" path="res://addons/gecs/ecs/component.gd" id="2_glacq"]
+[ext_resource type="Script" uid="uid://cfw7qr4eqbq7i" path="res://Components/c_player.gd" id="3_x3qbn"]
+[ext_resource type="Script" uid="uid://crrvw6cdk20hf" path="res://Components/c_velocity.gd" id="5_8fjwl"]
+[ext_resource type="Script" uid="uid://bgxbjx8arpjmm" path="res://Components/c_gravity.gd" id="6_hyj0m"]
+[ext_resource type="Script" uid="uid://bej46encpmicw" path="res://Components/c_jump.gd" id="6_lfjwy"]
+[ext_resource type="PackedScene" uid="uid://pc6ai35eru5t" path="res://Low_Poly_female.fbx" id="7_3447d"]
+
+[sub_resource type="Resource" id="Resource_hyj0m"]
+script = ExtResource("3_x3qbn")
+metadata/_custom_type_script = "uid://cfw7qr4eqbq7i"
+
+[sub_resource type="Resource" id="Resource_lfjwy"]
+script = ExtResource("6_hyj0m")
+metadata/_custom_type_script = "uid://bgxbjx8arpjmm"
+
+[sub_resource type="Resource" id="Resource_8fjwl"]
+script = ExtResource("5_8fjwl")
+speed = 5.0
+metadata/_custom_type_script = "uid://crrvw6cdk20hf"
+
+[sub_resource type="Resource" id="Resource_x4kch"]
+script = ExtResource("6_lfjwy")
+jump_force = 5.0
+jump_buffer_duration = 0.12
+metadata/_custom_type_script = "uid://bej46encpmicw"
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_883qq"]
+radius = 0.6713867
+height = 4.069214
+
+[node name="Player" type="CharacterBody3D"]
+script = ExtResource("1_hk06b")
+component_resources = Array[ExtResource("2_glacq")]([SubResource("Resource_hyj0m"), SubResource("Resource_lfjwy"), SubResource("Resource_8fjwl"), SubResource("Resource_x4kch")])
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.034606934, 0)
+shape = SubResource("CapsuleShape3D_883qq")
+
+[node name="Low_Poly_female" parent="." instance=ExtResource("7_3447d")]

@@ -1,0 +1,90 @@
+[gd_scene load_steps=15 format=3 uid="uid://n6444fbllu4i"]
+
+[ext_resource type="Script" uid="uid://ds2l1b46mgtlt" path="res://main.gd" id="1_272bh"]
+[ext_resource type="Script" uid="uid://cdu5tlyk72uu4" path="res://addons/gecs/ecs/world.gd" id="1_ig7tw"]
+[ext_resource type="Script" uid="uid://cf84mkp0nv2mk" path="res://addons/gecs/io/serialize_config.gd" id="2_0xm2m"]
+[ext_resource type="Script" uid="uid://cq2cqs6s8p1mp" path="res://systems/s_movement.gd" id="3_1bvp3"]
+[ext_resource type="Script" uid="uid://ccpfjrjdwynkq" path="res://systems/s_gravity.gd" id="3_7mycd"]
+[ext_resource type="PackedScene" uid="uid://7g7sy7y2bm3e" path="res://entities/e_player.tscn" id="3_h2yge"]
+[ext_resource type="Script" uid="uid://wbui7dw8eveb" path="res://systems/s_input.gd" id="4_272bh"]
+[ext_resource type="Script" uid="uid://d0xqaruenk806" path="res://systems/s_jump.gd" id="7_dg77c"]
+[ext_resource type="Script" uid="uid://dvwp6egk8sdf0" path="res://systems/s_camera_follow.gd" id="8_efxa6"]
+[ext_resource type="PackedScene" uid="uid://cxte158xtdayl" path="res://entities/e_camera.tscn" id="9_4c57u"]
+[ext_resource type="PackedScene" uid="uid://darlll73p1muf" path="res://csg_box_3d.tscn" id="9_kek77"]
+
+[sub_resource type="Resource" id="Resource_7mycd"]
+script = ExtResource("2_0xm2m")
+metadata/_custom_type_script = "uid://cf84mkp0nv2mk"
+
+[sub_resource type="Environment" id="Environment_lquwl"]
+background_mode = 1
+background_color = Color(0.888, 0.76, 1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_272bh"]
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_272bh")
+
+[node name="World" type="Node" parent="."]
+script = ExtResource("1_ig7tw")
+entity_nodes_root = NodePath("Entities")
+system_nodes_root = NodePath("Systems")
+default_serialize_config = SubResource("Resource_7mycd")
+metadata/_custom_type_script = "uid://cdu5tlyk72uu4"
+
+[node name="Systems" type="Node" parent="World"]
+
+[node name="InputSystem" type="Node" parent="World/Systems"]
+script = ExtResource("4_272bh")
+metadata/_custom_type_script = "uid://wbui7dw8eveb"
+
+[node name="JumpSystem" type="Node" parent="World/Systems"]
+script = ExtResource("7_dg77c")
+metadata/_custom_type_script = "uid://d0xqaruenk806"
+
+[node name="GravitySystem" type="Node" parent="World/Systems"]
+script = ExtResource("3_7mycd")
+metadata/_custom_type_script = "uid://ccpfjrjdwynkq"
+
+[node name="MovementSystem" type="Node" parent="World/Systems"]
+script = ExtResource("3_1bvp3")
+metadata/_custom_type_script = "uid://cq2cqs6s8p1mp"
+
+[node name="CameraFollowSystem" type="Node" parent="World/Systems"]
+script = ExtResource("8_efxa6")
+group = null
+process_empty = null
+active = null
+parallel_processing = null
+parallel_threshold = null
+metadata/_custom_type_script = "uid://dvwp6egk8sdf0"
+
+[node name="Entities" type="Node" parent="World"]
+
+[node name="Player" parent="World/Entities" instance=ExtResource("3_h2yge")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6504784, 1.2583947, 1.7032572)
+id = "PlayerMain"
+
+[node name="Camera" parent="World/Entities" instance=ExtResource("9_4c57u")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.714706, 7.842593, 15.027807)
+id = "CameraMain"
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_lquwl")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.88284105, -0.39665368, 0.25151047, 0, 0.5355025, 0.8445336, -0.46967188, -0.74558896, 0.4727636, 0, 0, 0)
+shadow_enabled = true
+
+[node name="CSGMesh3D" type="CSGMesh3D" parent="."]
+transform = Transform3D(59.610962, 0, 0, 0, 1.0130281, 0, 0, 0, 63.478703, 0, 0, 0)
+use_collision = true
+mesh = SubResource("BoxMesh_272bh")
+
+[node name="CSGBox3D" parent="." instance=ExtResource("9_kek77")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.485232, 1.161514, -11.849336)
+size = Vector3(5.523555, 1.31, 9.2894535)
+
+[node name="CSGBox3D2" parent="." instance=ExtResource("9_kek77")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.485232, 3.1971736, -14.783272)
+size = Vector3(5.523555, 0.40878415, 3.4215822)
