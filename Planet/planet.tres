@@ -1,0 +1,57 @@
+[gd_resource type="Resource" load_steps=12 format=3 uid="uid://ci51icjpgi80s"]
+
+[ext_resource type="Script" uid="uid://12tqhi65uco8" path="res://Planet/PlanetData.cs" id="1_7o1so"]
+[ext_resource type="Shader" uid="uid://l2q54tbi3u0e" path="res://Planet/water.gdshader" id="1_aw8x8"]
+[ext_resource type="Shader" uid="uid://d7y77y7jo0s2" path="res://Planet/terrain.gdshader" id="2_2va8v"]
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_aw8x8"]
+noise_type = 0
+seed = 5
+frequency = 0.7
+fractal_octaves = 4
+
+[sub_resource type="Curve" id="Curve_7o1so"]
+_data = [Vector2(0, 0), 0.0, 0.0, 0, 0, Vector2(0.4212766, 0.14606738), 0.0, 0.0, 0, 0, Vector2(0.49787232, 0.32584268), 0.71363443, 0.71363443, 0, 0, Vector2(0.6255319, 0.3595506), 0.0, 0.0, 0, 0, Vector2(0.6255419, 0.56179774), 1.6248921, 1.6248921, 0, 0, Vector2(0.8042553, 0.7078651), 1.218669, 1.218669, 0, 0, Vector2(0.8638298, 0.9325842), 0.9016176, 0.9016176, 0, 0, Vector2(1, 1), 0.0, 0.0, 0, 0]
+point_count = 8
+
+[sub_resource type="Gradient" id="Gradient_2va8v"]
+offsets = PackedFloat32Array(0, 0.44751382, 1)
+colors = PackedColorArray(0.25, 0.47499996, 1, 1, 0.12309457, 0.23944598, 0.50625813, 1, 0.015948104, 0.050018452, 0.14159408, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_utcsq"]
+gradient = SubResource("Gradient_2va8v")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_xuf3w"]
+render_priority = 0
+shader = ExtResource("1_aw8x8")
+shader_parameter/specular = 0.9
+shader_parameter/roughness = 0.215
+shader_parameter/radius = 3.66
+shader_parameter/level = 10.0
+shader_parameter/gradient = SubResource("GradientTexture1D_utcsq")
+
+[sub_resource type="Gradient" id="Gradient_utcsq"]
+interpolation_mode = 1
+offsets = PackedFloat32Array(0, 0.022099448, 0.13812155, 0.35911602, 0.9392265)
+colors = PackedColorArray(1, 0.7793038, 0.6153523, 1, 0, 0.44326904, 0.09291763, 1, 0.031900004, 0.29, 0.07491663, 1, 0.31, 0.29512, 0.2542, 1, 1, 1, 1, 1)
+
+[sub_resource type="GradientTexture1D" id="GradientTexture1D_xuf3w"]
+gradient = SubResource("Gradient_utcsq")
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_iphim"]
+render_priority = 0
+shader = ExtResource("2_2va8v")
+shader_parameter/specular = 0.26
+shader_parameter/roughness = 0.805
+shader_parameter/radius = 115.595
+shader_parameter/height = 18.61
+shader_parameter/gradient = SubResource("GradientTexture1D_xuf3w")
+
+[resource]
+script = ExtResource("1_7o1so")
+Radius = 100.0
+Resolution = 128
+BaseNoise = SubResource("FastNoiseLite_aw8x8")
+HeightCurve = SubResource("Curve_7o1so")
+TerrainMaterial = SubResource("ShaderMaterial_iphim")
+OceanMaterial = SubResource("ShaderMaterial_xuf3w")

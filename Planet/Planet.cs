@@ -5,7 +5,6 @@ using System;
 public partial class Planet : Node3D
 {
 	[Export] public PlanetData Data { get; set; }
-	[Export] public Node3D PlayerNode { get; set; } // PlayerNode теперь здесь
 
 	private bool _isReady = false;
 
@@ -28,7 +27,6 @@ public partial class Planet : Node3D
 	{
 		if (!_isReady || Data == null) return;
 
-		// Очищаем старые грани
 		foreach (Node child in GetChildren())
 		{
 			if (child is PlanetFace)
@@ -42,13 +40,13 @@ public partial class Planet : Node3D
 
 		string[] faceNames = { "Top", "Bottom", "Left", "Right", "Front", "Back" };
 
-		// Создаем грани для земли
+
 		for (int i = 0; i < 6; i++)
 		{
 			CreateFace(directions[i], faceNames[i] + "_Land", false);
 		}
 
-		// Создаем грани для океана (если нужно)
+
 		if (Data.HasOcean)
 		{
 			for (int i = 0; i < 6; i++)
@@ -65,7 +63,6 @@ public partial class Planet : Node3D
 		face.FaceNormal = direction;
 		face.Data = Data;
 		face.IsOcean = isOcean;
-		face.PlayerNode = PlayerNode; // Передаем ссылку на игрока
 
 		AddChild(face);
 
@@ -74,30 +71,31 @@ public partial class Planet : Node3D
 			face.Owner = GetTree().EditedSceneRoot;
 		}
 	}
-	public override void _Process(double delta)
-	{
-		// Автоматически обновляем LOD каждый кадр (для тестирования)
-		UpdateLOD();
-	}
 
-	public void UpdateLOD()
+	public void UpdateAllFaces()
 	{
 		foreach (Node child in GetChildren())
 		{
 			if (child is PlanetFace face)
 			{
-				face.UpdateLOD();
+				face.UpdateData(Data);
 			}
 		}
 	}
-	
-	public void update_lod()
-	{
-		UpdateLOD();
-	}
 
-	public void OnPlayerMoved(Vector3 position)
+	public float GetHeightAtGlobalPoint(Vector3 globalPoint)
 	{
-		UpdateLOD();
+		Vector3 localPoint = ToLocal(globalPoint);
+		Vector3 pointOnSphere = localPoint.Normalized();
+
+		foreach (Node child in GetChildren())
+		{
+			if (child is PlanetFace face && !face.IsOcean)
+			{
+				return face.GetHeightAtPoint(pointOnSphere);
+			}
+		}
+		
+		return Data?.Radius ?? 0f;
 	}
 }

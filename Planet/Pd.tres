@@ -1,6 +1,0 @@
-[gd_resource type="Resource" load_steps=2 format=3 uid="uid://nwjh7pigxxg7"]
-
-[ext_resource type="Script" uid="uid://bat45ex1l57ms" path="res://Planet/PlanetData.cs" id="1_eq2hf"]
-
-[resource]
-script = ExtResource("1_eq2hf")
