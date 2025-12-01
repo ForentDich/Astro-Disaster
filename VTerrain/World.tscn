@@ -1,6 +1,13 @@
 [gd_scene load_steps=2 format=3 uid="uid://cw0sjbhqqn6ec"]
 
-[ext_resource type="Script" uid="uid://cdq55a0cfiit6" path="res://VTerrain/VoxelMeshViewer.cs" id="1_cdn78"]
+[ext_resource type="Script" uid="uid://bu78pf2y472mi" path="res://VTerrain/TerrainManager.cs" id="1_cdn78"]
 
 [node name="World" type="Node3D"]
 script = ExtResource("1_cdn78")
+RenderDistance = 4
+WorldHeightScale = 0.75
+NoiseScale = 0.5
+Octaves = 5
+Persistence = 0.395
+Lacunarity = 1.0
+MaxHeight = 40

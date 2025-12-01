@@ -1,4 +1,4 @@
-[gd_scene load_steps=19 format=3 uid="uid://n6444fbllu4i"]
+[gd_scene load_steps=20 format=3 uid="uid://n6444fbllu4i"]
 
 [ext_resource type="Script" uid="uid://ds2l1b46mgtlt" path="res://main.gd" id="1_272bh"]
 [ext_resource type="Script" uid="uid://cdu5tlyk72uu4" path="res://addons/gecs/ecs/world.gd" id="1_ig7tw"]
@@ -13,6 +13,7 @@
 [ext_resource type="Script" uid="uid://ccvwrcod07qie" path="res://Systems/s_input_camera.gd" id="9_dg77c"]
 [ext_resource type="Script" uid="uid://cmmb45jshhcvf" path="res://Systems/s_entity_rotation.gd" id="10_ycdy4"]
 [ext_resource type="Texture2D" uid="uid://dic6s3qicaaux" path="res://skybox/skybox_image_space_1.png" id="13_w48qg"]
+[ext_resource type="Script" uid="uid://bu78pf2y472mi" path="res://VTerrain/TerrainManager.cs" id="14_w48qg"]
 
 [sub_resource type="Resource" id="Resource_7mycd"]
 script = ExtResource("2_0xm2m")
@@ -29,7 +30,9 @@ background_mode = 2
 sky = SubResource("Sky_2cqfq")
 ambient_light_source = 3
 
-[sub_resource type="BoxMesh" id="BoxMesh_272bh"]
+[sub_resource type="BoxMesh" id="BoxMesh_w48qg"]
+lightmap_size_hint = Vector2i(14, 21)
+add_uv2 = true
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_272bh")
@@ -74,11 +77,11 @@ metadata/_custom_type_script = "uid://cmmb45jshhcvf"
 [node name="Entities" type="Node" parent="World"]
 
 [node name="Player" parent="World/Entities" instance=ExtResource("3_h2yge")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6504784, 3.2583947, 1.7032572)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6504784, 18.64212, 0.35220575)
 id = "PlayerMain"
 
 [node name="Camera" parent="World/Entities" instance=ExtResource("9_4c57u")]
-transform = Transform3D(0.82894975, 0, 0.5593232, 0, 1, 0, -0.5593232, 0, 0.82894975, 6.1914344, 4.3146253, 7.1699257)
+transform = Transform3D(0.82894975, 0, 0.5593232, 0, 1, 0, -0.5593232, 0, 0.82894975, 6.1914344, 17.379763, 7.1699257)
 id = "CameraMain"
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
@@ -88,7 +91,16 @@ environment = SubResource("Environment_yaehf")
 transform = Transform3D(0.71654445, -0.58691376, 0.37695667, -0.00048699902, 0.5399865, 0.8416735, -0.6975413, -0.6032801, 0.3866385, 0, 0, 0)
 shadow_enabled = true
 
-[node name="CSGMesh3D" type="CSGMesh3D" parent="."]
-transform = Transform3D(59.610962, 0, 0, 0, 1.0130281, 0, 0, 0, 63.478703, 0, 0, 0)
-use_collision = true
-mesh = SubResource("BoxMesh_272bh")
+[node name="Node3D" type="Node3D" parent="." node_paths=PackedStringArray("Viewer")]
+script = ExtResource("14_w48qg")
+Viewer = NodePath("../World/Entities/Player")
+RenderDistance = 12
+WorldHeightScale = 0.5
+NoiseScale = 0.6
+Persistence = 0.3
+Lacunarity = 1.0
+MaxHeight = 70
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 25.1996, 0)
+mesh = SubResource("BoxMesh_w48qg")
