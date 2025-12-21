@@ -1,0 +1,9 @@
+{
+	"servers": {
+		"friflo ECS": {
+			"url": "https://friflo.gitbook.io/friflo.engine.ecs/~gitbook/mcp",
+			"type": "http"
+		}
+	},
+	"inputs": []
+}

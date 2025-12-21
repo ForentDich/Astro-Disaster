@@ -1,10 +1,12 @@
 using Godot;
 using System;
+using System.Runtime.CompilerServices;
 
 public static class TileMeshes
 {
     private static readonly int TileTypeCount = Enum.GetValues(typeof(TileType)).Length;
     private static readonly Vector3[][] _precomputedVertices = new Vector3[TileTypeCount][]; 
+    private static readonly Vector3[][] _precomputedNormals = new Vector3[TileTypeCount][];
     private static readonly float[][] _precomputedHeights = new float[TileTypeCount][];
 
 
@@ -16,14 +18,49 @@ public static class TileMeshes
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector3[] GetVertices(TileType type) => _precomputedVertices[(int)type];
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector3[] GetVertices(byte type) => _precomputedVertices[type % TileTypeCount];
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector3[] GetNormals(TileType type) => _precomputedNormals[(int)type];
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static Vector3[] GetNormals(byte type) => _precomputedNormals[type % TileTypeCount];
+    
     public static float[] GetHeights(TileType type) => _precomputedHeights[(int)type];
 
     private static void PrecomputeTileData(TileType type)
     {
         var (heights, inverted) = GetHeightsForType(type);
-        _precomputedVertices[(int)type] = CreateVertices(heights, inverted);
+        var vertices = CreateVertices(heights, inverted);
+        _precomputedVertices[(int)type] = vertices;
+        _precomputedNormals[(int)type] = ComputeNormals(vertices);
         _precomputedHeights[(int)type] = heights;
+    }
+    
+    private static Vector3[] ComputeNormals(Vector3[] vertices)
+    {
+        var normals = new Vector3[vertices.Length];
+        
+        for (int i = 0; i < vertices.Length; i += 3)
+        {
+            var v0 = vertices[i];
+            var v1 = vertices[i + 1];
+            var v2 = vertices[i + 2];
+            
+            var edge1 = v1 - v0;
+            var edge2 = v2 - v0;
+            var normal = edge1.Cross(edge2).Normalized();
+            
+            normals[i] = normal;
+            normals[i + 1] = normal;
+            normals[i + 2] = normal;
+        }
+        
+        return normals;
     }
 
     private static (float[] heights, bool inverted) GetHeightsForType(TileType type)
