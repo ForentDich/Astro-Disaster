@@ -57,7 +57,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 	{
 		if (Viewer == null) return;
 
-		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.ChunkSize);
+		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_SIZE);
 
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
 		_selectedCount = 0;
@@ -115,7 +115,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 			return null;
 		}
 
-		int size = ChunkConstants.ChunkSize;
+		int size = ChunkConstants.CHUNK_SIZE;
 		var triangles = new List<Vector3>();
 
 

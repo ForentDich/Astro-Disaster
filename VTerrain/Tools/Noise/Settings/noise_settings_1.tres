@@ -1,4 +1,4 @@
-[gd_resource type="Resource" load_steps=3 format=3 uid="uid://bqlf6kpnwo78u"]
+[gd_resource type="Resource" script_class="NoiseSettings" load_steps=3 format=3 uid="uid://bqlf6kpnwo78u"]
 
 [ext_resource type="Script" uid="uid://qf86h2aoijle" path="res://VTerrain/Tools/Noise/Settings/NoiseSettings.cs" id="1_ue74k"]
 

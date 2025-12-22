@@ -35,7 +35,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
         if (MaxPerFrame <= 0)
             return;
 
-        (int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.ChunkSize);
+        (int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_SIZE);
 
         NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
         _selectedCount = 0;
@@ -79,7 +79,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
                         if (TerrainMaterial != null)
                             existing.MaterialOverride = TerrainMaterial;
                         existing.Name = $"Chunk_{info.X}_{info.Z}";
-                        existing.Position = new Vector3(info.X * ChunkConstants.ChunkSize, 0, info.Z * ChunkConstants.ChunkSize);
+                        existing.Position = new Vector3(info.X * ChunkConstants.CHUNK_SIZE, 0, info.Z * ChunkConstants.CHUNK_SIZE);
                     }
                     else
                     {
@@ -120,7 +120,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
     {
         ReadOnlySpan<byte> dataSpan = terrainData;
         
-        int size = ChunkConstants.ChunkSize;
+        int size = ChunkConstants.CHUNK_SIZE;
         int tileCount = size * size;
         int totalVertices = tileCount * 6;
         
@@ -178,7 +178,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 
     private MeshInstance3D CreateMeshInstance(Mesh mesh, ChunkInfo chunkInfo)
     {
-        int size = ChunkConstants.ChunkSize;
+        int size = ChunkConstants.CHUNK_SIZE;
         var meshInstance = new MeshInstance3D
         {
             Mesh = mesh,

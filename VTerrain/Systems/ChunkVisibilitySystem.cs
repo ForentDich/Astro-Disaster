@@ -259,8 +259,8 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 	private (int x, int z) GetChunkCoords(Vector3 worldPos)
 	{
 		return (
-			Mathf.FloorToInt(worldPos.X / ChunkConstants.ChunkSize),
-			Mathf.FloorToInt(worldPos.Z / ChunkConstants.ChunkSize)
+			Mathf.FloorToInt(worldPos.X / ChunkConstants.CHUNK_SIZE),
+			Mathf.FloorToInt(worldPos.Z / ChunkConstants.CHUNK_SIZE)
 		);
 	}
 }

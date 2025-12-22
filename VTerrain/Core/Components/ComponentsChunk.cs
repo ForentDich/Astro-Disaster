@@ -9,7 +9,7 @@ public struct ChunkInfo : IComponent {
 
 public struct ChunkTerrain : IComponent
 {
-	public byte[] Data; // [height, tileType] * ChunkSize * ChunkSizeы
+	public byte[] Data; // [height, tileType] * CHUNK_SIZE * CHUNK_SIZEы
 }
 public struct ChunkMesh: IComponent
 {

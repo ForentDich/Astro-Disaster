@@ -13,7 +13,7 @@
 [ext_resource type="Script" uid="uid://ccvwrcod07qie" path="res://Systems/s_input_camera.gd" id="9_dg77c"]
 [ext_resource type="Script" uid="uid://cmmb45jshhcvf" path="res://Systems/s_entity_rotation.gd" id="10_ycdy4"]
 [ext_resource type="Texture2D" uid="uid://dic6s3qicaaux" path="res://skybox/skybox_image_space_1.png" id="13_w48qg"]
-[ext_resource type="Script" uid="uid://b5jdflsd5w8kk" path="res://VTerrain/TerrainWorld.cs" id="14_w48qg"]
+[ext_resource type="Script" uid="uid://d4l3avokcmrnx" path="res://VTerrain/GameSession.cs" id="14_w48qg"]
 [ext_resource type="Resource" uid="uid://bqlf6kpnwo78u" path="res://VTerrain/Tools/Noise/Settings/noise_settings_1.tres" id="15_vivmo"]
 
 [sub_resource type="Resource" id="Resource_7mycd"]
@@ -95,14 +95,12 @@ shadow_enabled = true
 [node name="Node3D" type="Node3D" parent="." node_paths=PackedStringArray("Viewer")]
 script = ExtResource("14_w48qg")
 Viewer = NodePath("../World/Entities/Player")
-RenderDistance = 16
+RenderDistance = 8
 NoiseSettings = ExtResource("15_vivmo")
-HeightScale = 0.4
-MaxCreatePerFrame = 48
-MaxDataGenPerFrame = 24
-MaxMeshBuildPerFrame = 8
-MaxCollisionBuildPerFrame = 4
-MaxRemovalPerFrame = 12
+MaxCreatePerFrame = 32
+MaxDataGenPerFrame = 16
+MaxMeshBuildPerFrame = 4
+MaxCollisionBuildPerFrame = 6
 
 [node name="CSGBox3D" type="CSGBox3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 25.505741, 0)

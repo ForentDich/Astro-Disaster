@@ -17,13 +17,11 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 
     private readonly ArrayPool<int> _heightPool = ArrayPool<int>.Shared;
 
-    [Export] public int MaxPerFrame { get; set; } = 4;
-    [Export] public Node3D Viewer { get; set; }
+    public int MaxPerFrame { get; set; } = 4;
+    public Node3D Viewer { get; set; }
     
-    [Export] public NoiseSettings NoiseSettings { get; set; }
-    
-    [ExportCategory("Height Settings")]
-    [Export(PropertyHint.Range, "0.0,1.0")] 
+    public NoiseSettings NoiseSettings { get; set; }
+
     public float HeightScale { get; set; } = 0.25f; // Используем 25% от MaxHeight
 
     public ChunkDataGenerationSystem() => Filter.AllTags(Tags.Get<ChunkPending>());
@@ -55,7 +53,7 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
             return;
         }
 
-        (int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.ChunkSize);
+        (int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_SIZE);
 
         NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
         _selectedCount = 0;
@@ -95,8 +93,8 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 
     private byte[] GenerateChunkData(ref ChunkInfo info)
     {
-        int size = ChunkConstants.ChunkSize;
-        int maxHeight = ChunkConstants.MaxHeight;
+        int size = ChunkConstants.CHUNK_SIZE;
+        int maxHeight = ConstantsCelestial.MAX_HEIGHT;
         int paddedSize = size + 1;
         int totalElements = paddedSize * paddedSize;
 

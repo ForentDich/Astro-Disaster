@@ -48,15 +48,15 @@ public static class NearestChunkSelectionTool
         selectedDistances[idx] = distance;
     }
 
-    public static (int x, int z) GetViewerChunkCoords(Node3D viewer, int chunkSize)
+    public static (int x, int z) GetViewerChunkCoords(Node3D viewer, int CHUNK_SIZE)
     {
         if (viewer == null)
             return (0, 0);
 
         Vector3 worldPos = viewer.GlobalPosition;
         return (
-            Mathf.FloorToInt(worldPos.X / chunkSize),
-            Mathf.FloorToInt(worldPos.Z / chunkSize)
+            Mathf.FloorToInt(worldPos.X / CHUNK_SIZE),
+            Mathf.FloorToInt(worldPos.Z / CHUNK_SIZE)
         );
     }
 }

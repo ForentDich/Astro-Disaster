@@ -1,9 +1,10 @@
+// GameSession.cs
 using Friflo.Engine.ECS;
 using Friflo.Engine.ECS.Systems;
 using Godot;
 using System;
 
-public partial class TerrainWorld : Node3D
+public partial class GameSession : Node
 {
 	[ExportGroup("View")]
 	[Export] public Node3D Viewer { get; set; }
@@ -26,6 +27,11 @@ public partial class TerrainWorld : Node3D
 
 	[ExportGroup("Rendering")]
 	[Export] public Material TerrainMaterial { get; set; }
+
+	// Добавляем параметры для мира
+	[ExportGroup("World")]
+	[Export] public string WorldName { get; set; } = "MyWorld";
+	[Export] public int WorldSeed { get; set; } = 12345;
 
 	private EntityStore _store;
 	private SystemRoot _systems;
@@ -52,6 +58,13 @@ public partial class TerrainWorld : Node3D
 
 		_store = new EntityStore();
 
+		var worldCreator = new SystemWorldCreator
+		{
+			WorldName = WorldName,
+			WorldSeed = WorldSeed,
+			CreateOnStart = true
+		};
+
 		var visibilitySystem = new ChunkVisibilitySystem
 		{
 			Viewer = Viewer,
@@ -69,7 +82,7 @@ public partial class TerrainWorld : Node3D
 		{
 			Viewer = Viewer,
 			MaxPerFrame = MaxDataGenPerFrame,
-			NoiseSettings = NoiseSettings,  
+			NoiseSettings = NoiseSettings,
 			HeightScale = HeightScale
 
 		};
@@ -93,6 +106,8 @@ public partial class TerrainWorld : Node3D
 
 		_systems = new SystemRoot(_store)
 		{
+			// Добавляем worldCreator первым, чтобы мир создался до генерации чанков
+			worldCreator,
 			visibilitySystem,
 			removalSystem,
 			dataGenSystem,
@@ -109,6 +124,19 @@ public partial class TerrainWorld : Node3D
 			AutoTuneBudgets((float)delta);
 
 		_systems.Update(new UpdateTick(_tick++, (float)delta));
+
+		if (_tick % 60 == 0)
+		{
+			try
+			{
+				var worldEntity = _store.GetUniqueEntity("World");
+				GD.Print($"[GameSession][Tick {_tick}] World exists {worldEntity}. Total entities: {_store.Count}");
+			}
+			catch
+			{
+				GD.PrintErr($"[GameSession][Tick {_tick}] World not found!");
+			}
+		}
 	}
 
 	private void AutoTuneBudgets(float delta)
