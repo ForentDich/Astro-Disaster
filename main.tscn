@@ -95,8 +95,9 @@ shadow_enabled = true
 [node name="Node3D" type="Node3D" parent="." node_paths=PackedStringArray("Viewer")]
 script = ExtResource("14_w48qg")
 Viewer = NodePath("../World/Entities/Player")
-RenderDistance = 8
+RenderDistance = 16
 NoiseSettings = ExtResource("15_vivmo")
+HeightScale = 0.704
 MaxCreatePerFrame = 32
 MaxDataGenPerFrame = 16
 MaxMeshBuildPerFrame = 4

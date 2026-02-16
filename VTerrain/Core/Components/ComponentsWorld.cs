@@ -9,3 +9,9 @@ public struct WorldData : IComponent
     public ulong CreatedAt;
     public int Version;
 }
+
+public struct WorldOwnsCelestial : ILinkComponent
+{
+    public Entity target;
+    public Entity GetIndexedValue() => target;
+}

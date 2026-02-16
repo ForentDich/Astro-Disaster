@@ -5,6 +5,10 @@ public struct ChunkInfo : IComponent {
 	public int X;
 	public int Z;
 	public byte LOD;
+
+	public int SegmentX;
+	public int SegmentY;
+	public int FaceIndex;
 }
 
 public struct ChunkTerrain : IComponent

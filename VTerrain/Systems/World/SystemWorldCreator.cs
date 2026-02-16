@@ -32,6 +32,18 @@ public class SystemWorldCreator : BaseSystem
     }
 
 
+    
+
+    private string _PrepareSavePath()
+    {
+        string safeName = WorldName
+            .Replace(" ", "_")
+            .Replace(":", "")
+            .Replace("/", "");
+
+        return $"user://worlds/{safeName}";
+    }
+
     private void _CreateWorld()
     {
         GD.Print("[ WorldCreator ] >> Creating world...");
@@ -58,8 +70,8 @@ public class SystemWorldCreator : BaseSystem
 
             _CreateFolders(savePath);
             _SaveMetadata(world, savePath);
-            
-            SaveStoreToJson(savePath);
+
+            //SaveStoreToJson(savePath);
 
             world.RemoveTag<WorldInitializing>();
             world.AddTag<WorldRunning>();
@@ -73,20 +85,11 @@ public class SystemWorldCreator : BaseSystem
         }
     }
 
-    private string _PrepareSavePath()
-    {
-        string safeName = WorldName
-            .Replace(" ", "_")
-            .Replace(":", "")
-            .Replace("/", "");
-
-        return $"user://worlds/{safeName}";
-    }
-
     private int _GenerateId()
     {
         return (WorldSeed ^ (int)_GetTimestamp()) & 0x7FFFFFFF;
     }
+
 
     private ulong _GetTimestamp()
     {
@@ -97,7 +100,7 @@ public class SystemWorldCreator : BaseSystem
     {
         string absolutePath = ProjectSettings.GlobalizePath(path);
         GD.Print($"[WorldCreator] Creating folder: {absolutePath}");
-        
+
         if (DirAccess.MakeDirRecursiveAbsolute(absolutePath) == Error.Ok)
         {
             GD.Print($"[WorldCreator] Folder created successfully");
@@ -107,7 +110,6 @@ public class SystemWorldCreator : BaseSystem
             GD.PrintErr($"[WorldCreator] Failed to create folder");
         }
     }
-
     private void _SaveMetadata(Entity world, string savePath)
     {
         string metaPath = $"{savePath}/world_meta.json";
@@ -127,12 +129,12 @@ public class SystemWorldCreator : BaseSystem
         try
         {
             var serializer = new EntitySerializer();
-            
+
             string jsonFilePath = $"{savePath}/entity-store.json";
             string absolutePath = ProjectSettings.GlobalizePath(jsonFilePath);
-            
+
             GD.Print($"[WorldCreator] Saving store to JSON: {absolutePath}");
-            
+
             using (var writeStream = new FileStream(absolutePath, FileMode.Create))
             {
                 serializer.WriteStore(_store, writeStream);

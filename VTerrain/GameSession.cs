@@ -65,6 +65,8 @@ public partial class GameSession : Node
 			CreateOnStart = true
 		};
 
+		var celestialCreator = new SystemCelestialCreator();
+
 		var visibilitySystem = new ChunkVisibilitySystem
 		{
 			Viewer = Viewer,
@@ -84,7 +86,6 @@ public partial class GameSession : Node
 			MaxPerFrame = MaxDataGenPerFrame,
 			NoiseSettings = NoiseSettings,
 			HeightScale = HeightScale
-
 		};
 
 		_meshBuildSystem = new ChunkMeshBuildSystem
@@ -106,8 +107,8 @@ public partial class GameSession : Node
 
 		_systems = new SystemRoot(_store)
 		{
-			// Добавляем worldCreator первым, чтобы мир создался до генерации чанков
 			worldCreator,
+			celestialCreator,
 			visibilitySystem,
 			removalSystem,
 			dataGenSystem,
@@ -125,7 +126,7 @@ public partial class GameSession : Node
 
 		_systems.Update(new UpdateTick(_tick++, (float)delta));
 
-		if (_tick % 60 == 0)
+		/*if (_tick % 60 == 0)
 		{
 			try
 			{
@@ -136,7 +137,7 @@ public partial class GameSession : Node
 			{
 				GD.PrintErr($"[GameSession][Tick {_tick}] World not found!");
 			}
-		}
+		}*/
 	}
 
 	private void AutoTuneBudgets(float delta)
