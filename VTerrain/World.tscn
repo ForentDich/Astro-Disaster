@@ -1,10 +1,8 @@
-[gd_scene load_steps=2 format=3 uid="uid://cw0sjbhqqn6ec"]
+[gd_scene format=3 uid="uid://cw0sjbhqqn6ec"]
 
-[ext_resource type="Script" uid="uid://b5jdflsd5w8kk" path="res://VTerrain/TerrainWorld.cs" id="1_cdn78"]
+[ext_resource type="Script" uid="uid://d4l3avokcmrnx" path="res://VTerrain/GameSession.cs" id="1_cdn78"]
 
-[node name="World" type="Node3D" node_paths=PackedStringArray("Viewer")]
+[node name="World" type="Node3D" unique_id=1275588007]
+
+[node name="Node3D" type="Node3D" parent="." unique_id=1152121479]
 script = ExtResource("1_cdn78")
-Viewer = NodePath("Node3D")
-RenderDistance = 2
-
-[node name="Node3D" type="Node3D" parent="."]

@@ -79,14 +79,15 @@ public class NoiseGenerator
         int offsetX, int offsetZ, 
         int width, int height, 
         int maxHeight,
-        float heightScale) // 0..1
+        float heightScale, // 0..1
+        int step = 1) // шаг семплирования (TILE_SIZE)
     {
         for (int z = 0; z < height; z++)
         {
             for (int x = 0; x < width; x++)
             {
-                float worldX = offsetX + x;
-                float worldZ = offsetZ + z;
+                float worldX = offsetX + x * step;
+                float worldZ = offsetZ + z * step;
                 
                 // Получаем комбинированный шум (уже нормализованный к 0..1)
                 float noiseValue = GetNoise(worldX, worldZ);

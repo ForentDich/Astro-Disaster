@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3 uid="uid://n6444fbllu4i"]
+[gd_scene format=3 uid="uid://n6444fbllu4i"]
 
 [ext_resource type="Script" uid="uid://ds2l1b46mgtlt" path="res://main.gd" id="1_272bh"]
 [ext_resource type="Script" uid="uid://cdu5tlyk72uu4" path="res://addons/gecs/ecs/world.gd" id="1_ig7tw"]
@@ -31,82 +31,70 @@ background_mode = 2
 sky = SubResource("Sky_2cqfq")
 ambient_light_source = 3
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_w48qg"]
-metallic = 0.24
-metallic_specular = 0.36
-
-[node name="Main" type="Node3D"]
+[node name="Main" type="Node3D" unique_id=438227230]
 script = ExtResource("1_272bh")
 
-[node name="World" type="Node" parent="."]
+[node name="World" type="Node" parent="." unique_id=1980673659]
 script = ExtResource("1_ig7tw")
 entity_nodes_root = NodePath("Entities")
 system_nodes_root = NodePath("Systems")
 default_serialize_config = SubResource("Resource_7mycd")
 metadata/_custom_type_script = "uid://cdu5tlyk72uu4"
 
-[node name="Systems" type="Node" parent="World"]
+[node name="Systems" type="Node" parent="World" unique_id=2053708127]
 
-[node name="InputPlayerSystem" type="Node" parent="World/Systems"]
+[node name="InputPlayerSystem" type="Node" parent="World/Systems" unique_id=1317555161]
 script = ExtResource("4_272bh")
 metadata/_custom_type_script = "uid://wbui7dw8eveb"
 
-[node name="JumpSystem" type="Node" parent="World/Systems"]
+[node name="JumpSystem" type="Node" parent="World/Systems" unique_id=1847543096]
 script = ExtResource("7_dg77c")
 metadata/_custom_type_script = "uid://d0xqaruenk806"
 
-[node name="GravitySystem" type="Node" parent="World/Systems"]
+[node name="GravitySystem" type="Node" parent="World/Systems" unique_id=2034873442]
 script = ExtResource("3_7mycd")
 metadata/_custom_type_script = "uid://ccpfjrjdwynkq"
 
-[node name="MovementSystem" type="Node" parent="World/Systems"]
+[node name="MovementSystem" type="Node" parent="World/Systems" unique_id=2092149311]
 script = ExtResource("3_1bvp3")
 metadata/_custom_type_script = "uid://cq2cqs6s8p1mp"
 
-[node name="CameraFollowSystem" type="Node" parent="World/Systems"]
+[node name="CameraFollowSystem" type="Node" parent="World/Systems" unique_id=1618750990]
 script = ExtResource("8_efxa6")
 metadata/_custom_type_script = "uid://dvwp6egk8sdf0"
 
-[node name="CameraInputSystem" type="Node" parent="World/Systems"]
+[node name="CameraInputSystem" type="Node" parent="World/Systems" unique_id=212074854]
 script = ExtResource("9_dg77c")
 metadata/_custom_type_script = "uid://ccvwrcod07qie"
 
-[node name="EntityRotationSystem" type="Node" parent="World/Systems"]
+[node name="EntityRotationSystem" type="Node" parent="World/Systems" unique_id=1134483371]
 script = ExtResource("10_ycdy4")
 metadata/_custom_type_script = "uid://cmmb45jshhcvf"
 
-[node name="Entities" type="Node" parent="World"]
+[node name="Entities" type="Node" parent="World" unique_id=434533720]
 
-[node name="Player" parent="World/Entities" instance=ExtResource("3_h2yge")]
+[node name="Player" parent="World/Entities" unique_id=1470933568 instance=ExtResource("3_h2yge")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.65, 324.08212, 0.352)
 id = "PlayerMain"
 
-[node name="Camera" parent="World/Entities" instance=ExtResource("9_4c57u")]
+[node name="Camera" parent="World/Entities" unique_id=663265623 instance=ExtResource("9_4c57u")]
 transform = Transform3D(0.82894975, 0, 0.5593232, 0, 1, 0, -0.5593232, 0, 0.82894975, 6.1914344, 17.379763, 7.1699257)
 id = "CameraMain"
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=212479978]
 environment = SubResource("Environment_yaehf")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1532577051]
 transform = Transform3D(0.71654445, -0.58691376, 0.37695667, -0.00048699902, 0.5399865, 0.8416735, -0.6975413, -0.6032801, 0.3866385, 0, 0, 0)
 shadow_enabled = true
 
-[node name="Node3D" type="Node3D" parent="." node_paths=PackedStringArray("Viewer")]
+[node name="Node3D" type="Node3D" parent="." unique_id=1236874063 node_paths=PackedStringArray("Viewer")]
 script = ExtResource("14_w48qg")
 Viewer = NodePath("../World/Entities/Player")
 RenderDistance = 16
 NoiseSettings = ExtResource("15_vivmo")
-HeightScale = 0.704
+HeightScale = 0.23
 MaxCreatePerFrame = 32
 MaxDataGenPerFrame = 16
 MaxMeshBuildPerFrame = 4
 MaxCollisionBuildPerFrame = 6
-
-[node name="CSGBox3D" type="CSGBox3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 25.505741, 0)
-visible = false
-layers = 0
-calculate_tangents = false
-size = Vector3(30000, 1, 30000)
-material = SubResource("StandardMaterial3D_w48qg")

@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://7g7sy7y2bm3e"]
+[gd_scene format=3 uid="uid://7g7sy7y2bm3e"]
 
 [ext_resource type="Script" uid="uid://bia2xbqtnycma" path="res://Entities/e_player.gd" id="1_hk06b"]
 [ext_resource type="Script" uid="uid://b6k13gc2m4e5s" path="res://addons/gecs/ecs/component.gd" id="2_glacq"]
@@ -26,17 +26,22 @@ jump_force = 5.0
 jump_buffer_duration = 0.12
 metadata/_custom_type_script = "uid://bej46encpmicw"
 
-[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_883qq"]
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_7njqu"]
+radius = 0.4
+height = 1.7
 
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_7njqu"]
+radius = 0.4
+height = 1.7
+radial_segments = 16
+rings = 4
 
-[node name="Player" type="CharacterBody3D"]
+[node name="Player" type="CharacterBody3D" unique_id=427691551]
 script = ExtResource("1_hk06b")
 component_resources = Array[ExtResource("2_glacq")]([SubResource("Resource_hyj0m"), SubResource("Resource_lfjwy"), SubResource("Resource_8fjwl"), SubResource("Resource_x4kch")])
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.00031280518, 0)
-shape = SubResource("CapsuleShape3D_883qq")
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=591438368]
+shape = SubResource("CapsuleShape3D_7njqu")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=762488741]
 mesh = SubResource("CapsuleMesh_7njqu")

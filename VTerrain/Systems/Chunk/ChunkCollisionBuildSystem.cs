@@ -57,7 +57,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 	{
 		if (Viewer == null) return;
 
-		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_SIZE);
+		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_WORLD_SIZE);
 
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
 		_selectedCount = 0;
@@ -130,7 +130,9 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				TileType tileType = (TileType)terrainData[dataOffset + 1];
 				
 				Vector3[] tileVertices = TileMeshes.GetVertices(tileType);
-				Vector3 tileOffset = new Vector3(x, baseHeight, z);
+				int ts = ChunkConstants.TILE_SIZE;
+				float th = ChunkConstants.TILE_HEIGHT;
+				Vector3 tileOffset = new Vector3(x * ts, baseHeight * th, z * ts);
 				
 				for (int v = 0; v < tileVertices.Length; v++)
 				{
@@ -156,7 +158,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		};
 
 		staticBody.AddChild(collisionShape);
-		staticBody.Position = new Vector3(info.X * size, 0, info.Z * size);
+		staticBody.Position = new Vector3(info.X * ChunkConstants.CHUNK_WORLD_SIZE, 0, info.Z * ChunkConstants.CHUNK_WORLD_SIZE);
 
 		if (DebugCollision)
 		{

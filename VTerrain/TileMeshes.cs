@@ -99,22 +99,29 @@ public static class TileMeshes
 
     private static Vector3[] CreateVertices(float[] heights, bool inverted = false)
     {
+        const float S = ChunkConstants.TILE_SIZE;
+        const float H = ChunkConstants.TILE_HEIGHT; // Высота для угла 30°
+        float h0 = heights[0] * H;
+        float h1 = heights[1] * H;
+        float h2 = heights[2] * H;
+        float h3 = heights[3] * H;
+        
         return inverted ? 
         [
-            new Vector3(1, heights[1], 0),
-            new Vector3(0, heights[3], 1), 
-            new Vector3(0, heights[0], 0),
-            new Vector3(1, heights[1], 0),
-            new Vector3(1, heights[2], 1),
-            new Vector3(0, heights[3], 1)
+            new Vector3(S, h1, 0),
+            new Vector3(0, h3, S), 
+            new Vector3(0, h0, 0),
+            new Vector3(S, h1, 0),
+            new Vector3(S, h2, S),
+            new Vector3(0, h3, S)
         ] : 
         [
-            new Vector3(0, heights[0], 0),
-            new Vector3(1, heights[1], 0),
-            new Vector3(1, heights[2], 1),
-            new Vector3(0, heights[0], 0),
-            new Vector3(1, heights[2], 1),
-            new Vector3(0, heights[3], 1)
+            new Vector3(0, h0, 0),
+            new Vector3(S, h1, 0),
+            new Vector3(S, h2, S),
+            new Vector3(0, h0, 0),
+            new Vector3(S, h2, S),
+            new Vector3(0, h3, S)
         ];
     }
 }

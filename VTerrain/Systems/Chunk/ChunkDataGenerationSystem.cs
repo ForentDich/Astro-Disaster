@@ -53,7 +53,7 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 			return;
 		}
 
-		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_SIZE);
+		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_WORLD_SIZE);
 
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
 		_selectedCount = 0;
@@ -117,8 +117,9 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 	private void GenerateHeightmap(ref ChunkInfo info, Span<int> heights, int size, int maxHeight)
 	{
 		int paddedSize = size + 1;
-		int worldOffsetX = info.X * size;
-		int worldOffsetZ = info.Z * size;
+		int ts = ChunkConstants.TILE_SIZE;
+		int worldOffsetX = info.X * size * ts;
+		int worldOffsetZ = info.Z * size * ts;
 
 		_noiseGenerator.GenerateHeightmap(
 			heights,
@@ -127,7 +128,8 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 			paddedSize, 
 			paddedSize,
 			maxHeight,
-			HeightScale
+			HeightScale,
+			ts
 		);
 	}
 

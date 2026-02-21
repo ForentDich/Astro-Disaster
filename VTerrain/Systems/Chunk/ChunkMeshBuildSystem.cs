@@ -35,7 +35,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		if (MaxPerFrame <= 0)
 			return;
 
-		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_SIZE);
+		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_WORLD_SIZE);
 
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
 		_selectedCount = 0;
@@ -79,7 +79,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 						if (TerrainMaterial != null)
 							existing.MaterialOverride = TerrainMaterial;
 						existing.Name = $"Chunk_{info.X}_{info.Z}";
-						existing.Position = new Vector3(info.X * ChunkConstants.CHUNK_SIZE, 0, info.Z * ChunkConstants.CHUNK_SIZE);
+						existing.Position = new Vector3(info.X * ChunkConstants.CHUNK_WORLD_SIZE, 0, info.Z * ChunkConstants.CHUNK_WORLD_SIZE);
 					}
 					else
 					{
@@ -145,7 +145,9 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				
 				int tileX = i % size;
 				int tileZ = i / size;
-				Vector3 tileOffset = new Vector3(tileX, baseHeight, tileZ);
+				int ts = ChunkConstants.TILE_SIZE;
+				float th = ChunkConstants.TILE_HEIGHT;
+				Vector3 tileOffset = new Vector3(tileX * ts, baseHeight * th, tileZ * ts);
 				
 				for (int v = 0; v < tileVertices.Length; v++)
 				{
@@ -178,7 +180,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 
 	private MeshInstance3D CreateMeshInstance(Mesh mesh, ChunkInfo chunkInfo)
 	{
-		int size = ChunkConstants.CHUNK_SIZE;
+		int worldSize = ChunkConstants.CHUNK_WORLD_SIZE;
 		var meshInstance = new MeshInstance3D
 		{
 			Mesh = mesh,
@@ -186,7 +188,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 			Name = $"Chunk_{chunkInfo.X}_{chunkInfo.Z}"
 		};
 
-		meshInstance.Position = new Vector3(chunkInfo.X * size, 0, chunkInfo.Z * size);
+		meshInstance.Position = new Vector3(chunkInfo.X * worldSize, 0, chunkInfo.Z * worldSize);
 
 		ParentNode?.AddChild(meshInstance);
 		return meshInstance;
