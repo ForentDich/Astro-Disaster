@@ -21,7 +21,6 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-DebugMenu="*uid://cggqb75a8w8r"
 ECS="*uid://dfqwl5njvdnmq"
 
 [display]
@@ -39,15 +38,15 @@ movie_writer/movie_file="C:/Users/forent/Documents/astro-disaster/1.avi"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/debug_menu/plugin.cfg", "res://addons/gecs/plugin.cfg")
+enabled=PackedStringArray("res://addons/gecs/plugin.cfg")
 
 [file_customization]
 
 folder_colors={
 "res://Components/": "teal",
 "res://Entities/": "orange",
-"res://Planet/": "pink",
-"res://Systems/": "purple"
+"res://Systems/": "purple",
+"res://VTerrain/": "yellow"
 }
 
 [input]

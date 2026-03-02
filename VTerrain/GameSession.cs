@@ -3,6 +3,8 @@ using Friflo.Engine.ECS;
 using Friflo.Engine.ECS.Systems;
 using Godot;
 using System;
+using System.Collections.Generic;
+using System.IO;
 
 public partial class GameSession : Node
 {
@@ -27,6 +29,7 @@ public partial class GameSession : Node
 
 	[ExportGroup("Rendering")]
 	[Export] public Material TerrainMaterial { get; set; }
+	[Export] public Material WaterMaterial { get; set; }
 
 	// Добавляем параметры для мира
 	[ExportGroup("World")]
@@ -35,11 +38,20 @@ public partial class GameSession : Node
 
 	private EntityStore _store;
 	private SystemRoot _systems;
+
+	// ── System references (for regeneration) ──
 	private ChunkMeshBuildSystem _meshBuildSystem;
+	private SystemSegmentCreator _segmentCreator;
+	private SegmentDataGenerationSystem _segmentDataGen;
+	private ChunkDataGenerationSystem _chunkDataGen;
 
 	private float _smoothedFrameMs = 16.6f;
 	private float _budgetTimer;
 	private int _meshBudget;
+
+	// ── Debug overlay ──
+	private Label _biomeLabel;
+	private bool _debugVisible;
 
 
 	private void SetupNoiseSettings()
@@ -51,10 +63,41 @@ public partial class GameSession : Node
 		}
 	}
 
+	/// <summary>
+	/// Computes sea level in tile-height units: coastLevel × HeightScale × MAX_HEIGHT.
+	/// </summary>
+	private int ComputeSeaLevelTile()
+	{
+		NoiseSettings.EnsureCurves();
+		float coastLevel = NoiseSettings.ContinentCurve.Sample(NoiseSettings.CoastStart);
+		return Mathf.RoundToInt(coastLevel * HeightScale * ConstantsCelestial.MAX_HEIGHT);
+	}
+
+	/// <summary>
+	/// Loads surfaces and height rules from JSON, builds shader LUT textures.
+	/// </summary>
+	private void SetupTerrain()
+	{
+		// Load surface definitions and height rules from JSON
+		SurfaceRegistry.Load();
+
+		// Load biome definitions (must be before SurfaceMapper.Initialize)
+		BiomeRegistry.Load();
+
+		// Build lookup tables for fast surface assignment
+		SurfaceMapper.Initialize();
+
+		// Build Texture2DArray + LUT textures and assign to shader
+		if (TerrainMaterial is ShaderMaterial shaderMat)
+		{
+			TerrainTextureLoader.Apply(shaderMat);
+		}
+	}
 
 	public override void _Ready()
 	{
 		SetupNoiseSettings();
+		SetupTerrain();
 
 		_store = new EntityStore();
 
@@ -66,6 +109,21 @@ public partial class GameSession : Node
 		};
 
 		var celestialCreator = new SystemCelestialCreator();
+
+		_segmentCreator = new SystemSegmentCreator
+		{
+			Viewer = Viewer,
+			LoadRadius = ConstantsSegment.LOAD_RADIUS,
+			UnloadRadius = ConstantsSegment.UNLOAD_RADIUS
+		};
+
+		_segmentDataGen = new SegmentDataGenerationSystem
+		{
+			NoiseSettings = NoiseSettings,
+			HeightScale = HeightScale,
+			MaxPerFrame = 1,
+			SeaLevelTile = ComputeSeaLevelTile()
+		};
 
 		var visibilitySystem = new ChunkVisibilitySystem
 		{
@@ -80,12 +138,21 @@ public partial class GameSession : Node
 			MaxPerFrame = MaxRemovalPerFrame
 		};
 
-		var dataGenSystem = new ChunkDataGenerationSystem
+		_chunkDataGen = new ChunkDataGenerationSystem
 		{
 			Viewer = Viewer,
 			MaxPerFrame = MaxDataGenPerFrame,
 			NoiseSettings = NoiseSettings,
-			HeightScale = HeightScale
+			HeightScale = HeightScale,
+			SegmentCreator = _segmentCreator,
+			SeaLevelTile = ComputeSeaLevelTile()
+		};
+
+		var chunkLoadSystem = new ChunkLoadSystem
+		{
+			Viewer = Viewer,
+			MaxPerFrame = MaxDataGenPerFrame,
+			SegmentCreator = _segmentCreator
 		};
 
 		_meshBuildSystem = new ChunkMeshBuildSystem
@@ -93,6 +160,8 @@ public partial class GameSession : Node
 			Viewer = Viewer,
 			MaxPerFrame = MaxMeshBuildPerFrame,
 			TerrainMaterial = TerrainMaterial,
+			WaterMaterial = WaterMaterial,
+			SeaLevelTile = ComputeSeaLevelTile(),
 			ParentNode = this
 		};
 
@@ -109,9 +178,12 @@ public partial class GameSession : Node
 		{
 			worldCreator,
 			celestialCreator,
+			_segmentCreator,
+			_segmentDataGen,
 			visibilitySystem,
 			removalSystem,
-			dataGenSystem,
+			chunkLoadSystem,
+			_chunkDataGen,
 			_meshBuildSystem,
 			collisionBuildSystem,
 		};
@@ -126,19 +198,77 @@ public partial class GameSession : Node
 
 		_systems.Update(new UpdateTick(_tick++, (float)delta));
 
-		/*if (_tick % 60 == 0)
-		{
-			try
-			{
-				var worldEntity = _store.GetUniqueEntity("World");
-				GD.Print($"[GameSession][Tick {_tick}] World exists {worldEntity}. Total entities: {_store.Count}");
-			}
-			catch
-			{
-				GD.PrintErr($"[GameSession][Tick {_tick}] World not found!");
-			}
-		}*/
+		UpdateDebugLabel();
 	}
+
+	public override void _UnhandledInput(InputEvent @event)
+	{
+		if (@event is InputEventKey key && key.Pressed && !key.Echo && key.Keycode == Key.F3)
+		{
+			_debugVisible = !_debugVisible;
+			EnsureDebugLabel();
+			_biomeLabel.Visible = _debugVisible;
+			GetViewport().SetInputAsHandled();
+		}
+	}
+
+	private void EnsureDebugLabel()
+	{
+		if (_biomeLabel != null) return;
+
+		var layer = new CanvasLayer { Layer = 100 };
+		AddChild(layer);
+
+		_biomeLabel = new Label();
+		_biomeLabel.Position = new Vector2(12, 12);
+		_biomeLabel.AddThemeFontSizeOverride("font_size", 16);
+		_biomeLabel.AddThemeColorOverride("font_color", Colors.White);
+		_biomeLabel.AddThemeColorOverride("font_shadow_color", new Color(0, 0, 0, 0.7f));
+		_biomeLabel.AddThemeConstantOverride("shadow_offset_x", 1);
+		_biomeLabel.AddThemeConstantOverride("shadow_offset_y", 1);
+		_biomeLabel.Visible = false;
+		layer.AddChild(_biomeLabel);
+	}
+
+	private void UpdateDebugLabel()
+	{
+		if (!_debugVisible || _biomeLabel == null || Viewer == null) return;
+
+		var pos = Viewer.GlobalPosition;
+		var noiseGen = _segmentDataGen?.NoiseGenerator;
+
+		string zoneName = "N/A";
+		string cValue = "—";
+		string eValue = "—";
+		string biomeName = "N/A";
+		if (noiseGen != null)
+		{
+			float C = noiseGen.GetContinentalness(pos.X, pos.Z);
+			float E = noiseGen.GetErosion(pos.X, pos.Z);
+			var zone = noiseGen.GetZone(C);
+			cValue = C.ToString("F3");
+			eValue = E.ToString("F3");
+			zoneName = zone switch
+			{
+				ContinentalZone.Ocean     => "Океан",
+				ContinentalZone.Coast     => "Берег",
+				ContinentalZone.Inland    => "Суша",
+				ContinentalZone.FarInland => "Глубина континента",
+				ContinentalZone.River     => "Река",
+				_ => zone.ToString()
+			};
+
+			int biomeIdx = BiomeRegistry.GetBiome((int)zone, E);
+			if (biomeIdx < BiomeRegistry.Count)
+				biomeName = BiomeRegistry.Biomes[biomeIdx].Name;
+		}
+
+		_biomeLabel.Text = $"Зона: {zoneName} (C={cValue})\n" +
+						   $"Эрозия: {eValue}\n" +
+						   $"Биом: {biomeName}\n" +
+						   $"Координаты: {pos.X:F0}, {pos.Y:F0}, {pos.Z:F0}";
+	}
+	
 
 	private void AutoTuneBudgets(float delta)
 	{

@@ -1,0 +1,80 @@
+[
+    {
+        "name": "Океан",
+        "zone": 0,
+        "erosionMin": 0.0, "erosionMax": 1.01,
+        "hasWater": true,
+        "heightRules": [
+            { "minHeight": 0, "maxHeight": 255, "surfaceIndex": 3 }
+        ]
+    },
+    {
+        "name": "Берег",
+        "zone": 1,
+        "erosionMin": 0.0, "erosionMax": 1.01,
+        "hasWater": true,
+        "heightRules": [
+            { "minHeight": 0, "maxHeight": 255, "surfaceIndex": 3 }
+        ]
+    },
+    {
+        "name": "Равнина",
+        "zone": 2,
+        "erosionMin": 0.5, "erosionMax": 1.01,
+        "hasWater": false,
+        "heightRules": [
+            { "minHeight": 110, "maxHeight": 255, "surfaceIndex": 4 },
+            { "minHeight":  90, "maxHeight": 109, "surfaceIndex": 0 },
+            { "minHeight":   0, "maxHeight":  89, "surfaceIndex": 2 }
+        ]
+    },
+    {
+        "name": "Холмы",
+        "zone": 2,
+        "erosionMin": 0.0, "erosionMax": 0.5,
+        "hasWater": false,
+        "heightRules": [
+            { "minHeight": 100, "maxHeight": 255, "surfaceIndex": 4 },
+            { "minHeight":  85, "maxHeight":  99, "surfaceIndex": 0 },
+            { "minHeight":   0, "maxHeight":  84, "surfaceIndex": 2 }
+        ]
+    },
+    {
+        "name": "Плато",
+        "zone": 3,
+        "erosionMin": 0.5, "erosionMax": 1.01,
+        "hasWater": false,
+        "heightRules": [
+            { "minHeight": 100, "maxHeight": 255, "surfaceIndex": 4 },
+            { "minHeight":  0, "maxHeight":  99, "surfaceIndex": 0 }
+        ]
+    },
+    {
+        "name": "Горы",
+        "zone": 3,
+        "erosionMin": 0.0, "erosionMax": 0.5,
+        "hasWater": false,
+        "heightRules": [
+            { "minHeight":  85, "maxHeight": 255, "surfaceIndex": 4 },
+            { "minHeight":  0, "maxHeight":  84, "surfaceIndex": 0 }
+        ]
+    },
+    {
+        "name": "Река (гравий)",
+        "zone": 4,
+        "erosionMin": 0.0, "erosionMax": 0.55,
+        "hasWater": true,
+        "heightRules": [
+            { "minHeight": 0, "maxHeight": 255, "surfaceIndex": 5 }
+        ]
+    },
+    {
+        "name": "Река (песок)",
+        "zone": 4,
+        "erosionMin": 0.55, "erosionMax": 1.01,
+        "hasWater": true,
+        "heightRules": [
+            { "minHeight": 0, "maxHeight": 255, "surfaceIndex": 3 }
+        ]
+    }
+]

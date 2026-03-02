@@ -172,15 +172,19 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 	private void CreateChunk(int x, int z, CommandBuffer buffer)
 	{
 		int entityId = buffer.CreateEntity();
-		
+
+		var (segX, segZ) = SegmentFile.ChunkToSegment(x, z);
+
 		buffer.AddComponent(entityId, new ChunkInfo 
 		{ 
 			X = x, 
 			Z = z, 
-			LOD = CalculateLOD(x, z)
+			LOD = CalculateLOD(x, z),
+			SegmentX = segX,
+			SegmentY = segZ
 		});
 		
-		buffer.AddTag<ChunkPending>(entityId);
+		buffer.AddTag<ChunkNeedsLoad>(entityId);
 		
 		_activeChunks[(x, z)] = entityId;
 		

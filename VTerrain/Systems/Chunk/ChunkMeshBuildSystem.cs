@@ -3,15 +3,23 @@ using Friflo.Engine.ECS.Systems;
 using Godot;
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 
 public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 {
 	public Material TerrainMaterial { get; set; }
+	public Material WaterMaterial { get; set; }
+	/// <summary>Sea level in tile height units (baseHeight). Tiles below get water.</summary>
+	public int SeaLevelTile { get; set; }
 	public int MaxPerFrame { get; set; } = 2;
 	public Node ParentNode { get; set; }
 	public Node3D Viewer { get; set; }
 
 	private EntityStore _store;
+
+	/// <summary>All chunks that have terrain data — used for neighbor lookups.</summary>
+	private ArchetypeQuery<ChunkInfo, ChunkTerrain> _allTerrainQuery;
+	private readonly Dictionary<(int, int), int> _chunkLookup = new();
 
 	private int[] _selectedEntityIds;
 	private int[] _selectedDistances;
@@ -26,6 +34,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 	{
 		base.OnAddStore(store);
 		_store = store;
+		_allTerrainQuery = store.Query<ChunkInfo, ChunkTerrain>();
 	}
 
 	protected override void OnUpdate()
@@ -34,6 +43,14 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 
 		if (MaxPerFrame <= 0)
 			return;
+
+		// Build coordinate → entityId lookup for neighbor queries
+		_chunkLookup.Clear();
+		foreach (var e in _allTerrainQuery.Entities)
+		{
+			ref var ci = ref e.GetComponent<ChunkInfo>();
+			_chunkLookup[(ci.X, ci.Z)] = e.Id;
+		}
 
 		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_WORLD_SIZE);
 
@@ -68,7 +85,11 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				ref var info = ref entity.GetComponent<ChunkInfo>();
 				ref var terrain = ref entity.GetComponent<ChunkTerrain>();
 
-				Mesh mesh = BuildMeshFromData(terrain.Data);
+				// Look up right / bottom neighbor data for boundary walls
+				byte[] rightData = GetNeighborData(info.X + 1, info.Z);
+				byte[] bottomData = GetNeighborData(info.X, info.Z + 1);
+
+				Mesh mesh = BuildMeshFromData(terrain.Data, rightData, bottomData);
 
 				if (entity.TryGetComponent<ChunkMesh>(out var chunkMesh))
 				{
@@ -76,8 +97,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 					if (existing != null)
 					{
 						existing.Mesh = mesh;
-						if (TerrainMaterial != null)
-							existing.MaterialOverride = TerrainMaterial;
+						existing.MaterialOverride = null;
 						existing.Name = $"Chunk_{info.X}_{info.Z}";
 						existing.Position = new Vector3(info.X * ChunkConstants.CHUNK_WORLD_SIZE, 0, info.Z * ChunkConstants.CHUNK_WORLD_SIZE);
 					}
@@ -116,11 +136,23 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		}
 	}
 
-	private Mesh BuildMeshFromData(byte[] terrainData)
+	private byte[] GetNeighborData(int cx, int cz)
+	{
+		if (_chunkLookup.TryGetValue((cx, cz), out int nId) &&
+			_store.TryGetEntityById(nId, out var nEnt) && !nEnt.IsNull &&
+			nEnt.TryGetComponent<ChunkTerrain>(out var nTerrain))
+		{
+			return nTerrain.Data;
+		}
+		return null;
+	}
+
+	private Mesh BuildMeshFromData(byte[] terrainData, byte[] rightNeighborData, byte[] bottomNeighborData)
 	{
 		ReadOnlySpan<byte> dataSpan = terrainData;
 		
 		int size = ChunkConstants.CHUNK_SIZE;
+		int stride = ChunkConstants.BYTES_PER_TILE;
 		int tileCount = size * size;
 		int totalVertices = tileCount * 6;
 		
@@ -131,33 +163,45 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		{
 			Span<Vector3> vertices = verticesArray.AsSpan(0, totalVertices);
 			Span<Vector3> normals = normalsArray.AsSpan(0, totalVertices);
+
+			// Parallel arrays for UV/UV2 (same size as vertices)
+			Span<Vector2> uvs  = stackalloc Vector2[totalVertices];
+			Span<Vector2> uv2s = stackalloc Vector2[totalVertices];
 			
 			int vertexIndex = 0;
 			
-			for (int i = 0; i < tileCount; i++)
+			for (int z = 0; z < size; z++)
 			{
-				int offset = i * 2;
-				int baseHeight = dataSpan[offset];
-				TileType tileType = (TileType)dataSpan[offset + 1];
-				
-				ReadOnlySpan<Vector3> tileVertices = TileMeshes.GetVertices(tileType).AsSpan();
-				ReadOnlySpan<Vector3> tileNormals = TileMeshes.GetNormals(tileType).AsSpan();
-				
-				int tileX = i % size;
-				int tileZ = i / size;
-				int ts = ChunkConstants.TILE_SIZE;
-				float th = ChunkConstants.TILE_HEIGHT;
-				Vector3 tileOffset = new Vector3(tileX * ts, baseHeight * th, tileZ * ts);
-				
-				for (int v = 0; v < tileVertices.Length; v++)
+				for (int x = 0; x < size; x++)
 				{
-					vertices[vertexIndex + v] = tileVertices[v] + tileOffset;
-					normals[vertexIndex + v] = tileNormals[v];
+					int offset = (z * size + x) * stride;
+					int baseHeight = dataSpan[offset];
+					TileType tileType = (TileType)dataSpan[offset + 1];
+					byte surfaceId = (byte)(dataSpan[offset + 2] & ChunkConstants.SURFACE_MASK);
+					
+					ReadOnlySpan<Vector3> tileVertices = TileMeshes.GetVertices(tileType).AsSpan();
+					ReadOnlySpan<Vector3> tileNormals = TileMeshes.GetNormals(tileType).AsSpan();
+					ReadOnlySpan<Vector2> tileUVs = TileMeshes.GetUVs(tileType).AsSpan();
+					
+					int ts = ChunkConstants.TILE_SIZE;
+					float th = ChunkConstants.TILE_HEIGHT;
+					Vector3 tileOffset = new Vector3(x * ts, baseHeight * th, z * ts);
+
+					Vector2 surfaceVec = new Vector2(surfaceId, 0);
+					
+					for (int v = 0; v < tileVertices.Length; v++)
+					{
+						vertices[vertexIndex + v] = tileVertices[v] + tileOffset;
+						normals[vertexIndex + v] = tileNormals[v];
+						uvs[vertexIndex + v] = tileUVs[v];
+						uv2s[vertexIndex + v] = surfaceVec;
+					}
+					
+					vertexIndex += tileVertices.Length;
 				}
-				
-				vertexIndex += tileVertices.Length;
 			}
 			
+			// ── Surface 0: terrain ──
 			SurfaceTool surfaceTool = new SurfaceTool();
 			surfaceTool.Begin(Mesh.PrimitiveType.Triangles);
 			surfaceTool.SetSmoothGroup(uint.MaxValue);
@@ -165,11 +209,71 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 			for (int i = 0; i < vertexIndex; i++)
 			{
 				surfaceTool.SetNormal(normals[i]);
+				surfaceTool.SetUV(uvs[i]);
+				surfaceTool.SetUV2(uv2s[i]);
 				surfaceTool.AddVertex(vertices[i]);
 			}
-			
-			surfaceTool.GenerateNormals();
-			return surfaceTool.Commit();
+
+			// Fill vertical gaps between tiles
+			ReadOnlySpan<byte> rightSpan = rightNeighborData != null
+				? new ReadOnlySpan<byte>(rightNeighborData)
+				: ReadOnlySpan<byte>.Empty;
+			ReadOnlySpan<byte> bottomSpan = bottomNeighborData != null
+				? new ReadOnlySpan<byte>(bottomNeighborData)
+				: ReadOnlySpan<byte>.Empty;
+
+			WallAutoMapper.GenerateWalls(surfaceTool, dataSpan, size, rightSpan, bottomSpan);
+
+			ArrayMesh arrayMesh = surfaceTool.Commit();
+			if (TerrainMaterial != null)
+				arrayMesh.SurfaceSetMaterial(0, TerrainMaterial);
+
+			// ── Surface 1: water tiles where waterFlag is set ──
+			if (SeaLevelTile > 0 && WaterMaterial != null)
+			{
+				ReadOnlySpan<Vector3> waterVerts = TileMeshes.GetVertices(TileType.Flat).AsSpan();
+				ReadOnlySpan<Vector3> waterNorms = TileMeshes.GetNormals(TileType.Flat).AsSpan();
+				ReadOnlySpan<Vector2> waterUVs   = TileMeshes.GetUVs(TileType.Flat).AsSpan();
+
+				int wts = ChunkConstants.TILE_SIZE;
+				float wth = ChunkConstants.TILE_HEIGHT;
+				float waterY = SeaLevelTile * wth - wth * 0.5f;
+				bool hasWater = false;
+
+				SurfaceTool waterST = new SurfaceTool();
+				waterST.Begin(Mesh.PrimitiveType.Triangles);
+				waterST.SetSmoothGroup(uint.MaxValue);
+
+				for (int z = 0; z < size; z++)
+				{
+					for (int x = 0; x < size; x++)
+					{
+						int off = (z * size + x) * stride;
+						byte surfByte = dataSpan[off + 2];
+
+						if ((surfByte & ChunkConstants.WATER_FLAG) != 0)
+						{
+							Vector3 waterOffset = new Vector3(x * wts, waterY, z * wts);
+
+							for (int v = 0; v < waterVerts.Length; v++)
+							{
+								waterST.SetNormal(waterNorms[v]);
+								waterST.SetUV(waterUVs[v]);
+								waterST.AddVertex(waterVerts[v] + waterOffset);
+							}
+							hasWater = true;
+						}
+					}
+				}
+
+				if (hasWater)
+				{
+					waterST.Commit(arrayMesh); // adds as surface 1
+					arrayMesh.SurfaceSetMaterial(1, WaterMaterial);
+				}
+			}
+
+			return arrayMesh;
 		}
 		finally
 		{
@@ -184,7 +288,6 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		var meshInstance = new MeshInstance3D
 		{
 			Mesh = mesh,
-			MaterialOverride = TerrainMaterial,
 			Name = $"Chunk_{chunkInfo.X}_{chunkInfo.Z}"
 		};
 

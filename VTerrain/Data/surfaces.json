@@ -1,0 +1,9 @@
+[
+    { "name": "Stone",      "tint": [0.50, 0.45, 0.45],  "slopeVariant": -1, "noiseStrength": 1.0,  "texture": "stone_1.png"  },
+    { "name": "Dirt",       "tint": [0.741, 0.537, 0.424],  "slopeVariant": -1, "noiseStrength": 1.0,  "texture": "grass.png"   },
+    { "name": "Grass",      "tint": [0.22, 0.86, 0.17],  "slopeVariant":  1, "noiseStrength": 1.0,  "texture": "grass.png"  },
+    { "name": "Sand",       "tint": [0.894, 0.91, 0.514],  "slopeVariant": -1, "noiseStrength": 1.0,  "texture": "sand.png"         },
+    { "name": "Snow",       "tint": [1, 1, 1],  "slopeVariant":  -1, "noiseStrength": 0.2,  "texture": "snow_04.png"   },
+    { "name": "Gravel",      "tint": [0.124, 0.131, 0.16],  "slopeVariant":  1, "noiseStrength": 1.0,  "texture": "gravel.png"  },
+    { "name": "Water",       "tint": [0.15, 0.35, 0.65],   "slopeVariant": -1, "noiseStrength": 0.3,  "texture": "water_02.png" }
+]

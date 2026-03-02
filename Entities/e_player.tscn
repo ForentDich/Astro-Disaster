@@ -33,8 +33,8 @@ height = 1.7
 [sub_resource type="CapsuleMesh" id="CapsuleMesh_7njqu"]
 radius = 0.4
 height = 1.7
-radial_segments = 16
-rings = 4
+radial_segments = 4
+rings = 2
 
 [node name="Player" type="CharacterBody3D" unique_id=427691551]
 script = ExtResource("1_hk06b")

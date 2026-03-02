@@ -51,11 +51,16 @@ public class SystemWorldCreator : BaseSystem
         try
         {
             string savePath = _PrepareSavePath();
+            int worldId = _GenerateId();
+
+            // Check if world already exists on disk
+            string absolutePath = ProjectSettings.GlobalizePath(savePath);
+            bool worldExists = DirAccess.DirExistsAbsolute(absolutePath);
 
             Entity world = _store.CreateEntity(new UniqueEntity("World"));
             world.AddComponent(new WorldData
             {
-                WorldId = _GenerateId(),
+                WorldId = worldId,
                 Name = WorldName,
                 Seed = WorldSeed,
                 SavePath = savePath,
@@ -66,17 +71,21 @@ public class SystemWorldCreator : BaseSystem
             world.AddTag<WorldInitializing>();
             world.AddTag<WorldCreated>();
             world.AddTag<WorldNeedsCelestial>();
-            world.AddTag<WorldNeedsSave>();
 
-            _CreateFolders(savePath);
-            _SaveMetadata(world, savePath);
-
-            //SaveStoreToJson(savePath);
+            if (!worldExists)
+            {
+                world.AddTag<WorldNeedsSave>();
+                _CreateFolders(savePath);
+                _SaveMetadata(world, savePath);
+                GD.Print($"[ WorldCreator ] >> World '{WorldName}' created (new)");
+            }
+            else
+            {
+                GD.Print($"[ WorldCreator ] >> World '{WorldName}' loaded (existing)");
+            }
 
             world.RemoveTag<WorldInitializing>();
             world.AddTag<WorldRunning>();
-
-            GD.Print($"[ WorldCreator ] >> World '{WorldName}' created");
         }
         catch (System.Exception ex)
         {
@@ -87,7 +96,8 @@ public class SystemWorldCreator : BaseSystem
 
     private int _GenerateId()
     {
-        return (WorldSeed ^ (int)_GetTimestamp()) & 0x7FFFFFFF;
+        // Deterministic: same seed → same ID, always
+        return WorldSeed & 0x7FFFFFFF;
     }
 
 

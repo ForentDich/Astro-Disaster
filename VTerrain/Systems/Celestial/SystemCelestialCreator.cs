@@ -34,7 +34,18 @@ public class SystemCelestialCreator : BaseSystem
 			int celestialId = _GenerateCelestialId(worldData);
 			
 			string celestialPath = Path.Combine(worldData.SavePath, $"Celestial_{celestialId}");
-			_CreateCelestialFolder(celestialPath);
+
+			// Only create folder if it doesn't exist yet
+			string absPath = ProjectSettings.GlobalizePath(celestialPath);
+			if (!DirAccess.DirExistsAbsolute(absPath))
+			{
+				_CreateCelestialFolder(celestialPath);
+				GD.Print($"[CelestialCreator] >> New celestial folder created");
+			}
+			else
+			{
+				GD.Print($"[CelestialCreator] >> Celestial folder already exists, reusing");
+			}
 
 			Entity celestial = _store.CreateEntity(new UniqueEntity($"Celestial_{celestialId}"));
 
@@ -148,8 +159,11 @@ public class SystemCelestialCreator : BaseSystem
 			$"Celestial_{celestialIdentity.Id}",
 			$"Face_{faceIndex}"
 		);
-		
-		_CreateFaceFolder(celestialPath);
+
+		// Only create folder if it doesn't exist yet
+		string absFacePath = ProjectSettings.GlobalizePath(celestialPath);
+		if (!DirAccess.DirExistsAbsolute(absFacePath))
+			_CreateFaceFolder(celestialPath);
 
 		Vector3 worldRight = worldUp.Cross(worldNormal).Normalized();
 
@@ -203,6 +217,11 @@ public class SystemCelestialCreator : BaseSystem
 
 	private int _GenerateCelestialId(WorldData worldData)
 	{
-		return (worldData.WorldId ^ (int)DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()) & 0x7FFFFFFF;
+		// Deterministic: same world seed → same celestial ID, always
+		unchecked
+		{
+			int h = worldData.Seed * 31 + 7;
+			return (h ^ worldData.WorldId) & 0x7FFFFFFF;
+		}
 	}
 }

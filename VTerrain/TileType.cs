@@ -1,28 +1,28 @@
 public enum TileType : byte
 {
-    Flat,              
-        
-    SlopeN,            
-    SlopeE,            
-    SlopeS,            
-    SlopeW,            
-    
-    CornerNW,
-    CornerNE,
-    CornerSW,  
-    CornerSE,          
+	Flat,              
+		
+	SlopeN,            
+	SlopeE,            
+	SlopeS,            
+	SlopeW,            
+	
+	CornerNW,
+	CornerNE,
+	CornerSW,  
+	CornerSE,          
 
-    CornerNW_Inverted,
-    CornerNE_Inverted,
-    CornerSW_Inverted, 
-    CornerSE_Inverted,
+	CornerNW_Inverted,
+	CornerNE_Inverted,
+	CornerSW_Inverted, 
+	CornerSE_Inverted,
 
-    SaddleNESW,
-    SaddleNWSE,
+	SaddleNESW,
+	SaddleNWSE,
 
-    SteepNW,
-    SteepNE,
-    SteepSW,
-    SteepSE,    
-    
+	SteepNW,
+	SteepNE,
+	SteepSW,
+	SteepSE,    
+	
 }

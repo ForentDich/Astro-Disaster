@@ -1,14 +1,24 @@
 using System;
+using System.Runtime.CompilerServices;
 using Godot;
 
 public class NoiseGenerator
 {
-    private FastNoiseLite _continentNoise;  // Континенты (очень низкая частота)
-    private FastNoiseLite _terrainNoise;    // Основной рельеф
+    private FastNoiseLite _continentNoise;  // Континентальность (крупные формы)
+    private FastNoiseLite _detailNoise;     // Детали рельефа (холмы, долины)
+    private FastNoiseLite _erosionNoise;    // Эрозия (гладкость рельефа)
+    private FastNoiseLite _riverNoise;      // Weirdness → реки через PV-складку
     private NoiseSettings _settings;
-    
-    public NoiseSettings Settings 
-    { 
+    private float _coastLevel;              // Кэш: ContinentCurve(CoastStart)
+
+    /// <summary>
+    /// Maximum allowed height difference between any two adjacent heightmap points.
+    /// MAX_GRADIENT=3 → adjacent corners differ by ≤3, diagonals by ≤6.
+    /// </summary>
+    public const int MAX_GRADIENT = 2;
+
+    public NoiseSettings Settings
+    {
         get => _settings;
         set
         {
@@ -16,88 +26,407 @@ public class NoiseGenerator
             ApplySettings();
         }
     }
-    
+
     public NoiseGenerator(NoiseSettings settings = null)
     {
         Settings = settings ?? NoiseSettings.CreateDefault();
     }
-    
+
     private void ApplySettings()
     {
         if (_settings == null) return;
-        
-        // 1. Шум для континентов (очень низкая частота)
+
+        // Континентальность: низкая частота, меньше октав → гладкие материки
+        // + Domain Warp для органичных границ зон
         _continentNoise = new FastNoiseLite
         {
-            Seed = _settings.Seed,
-            NoiseType = _settings.NoiseType,
-            Frequency = _settings.BaseFrequency, // ОЧЕНЬ низкая!
-            FractalType = FastNoiseLite.FractalTypeEnum.Fbm,
-            FractalOctaves = Mathf.Max(2, _settings.Octaves / 2), // Меньше октав для плавности
-            FractalGain = _settings.Persistence,
-            FractalLacunarity = _settings.Lacunarity
+            Seed              = _settings.Seed,
+            NoiseType         = _settings.NoiseType,
+            Frequency         = _settings.Frequency,
+            FractalType       = FastNoiseLite.FractalTypeEnum.Fbm,
+            FractalOctaves    = Mathf.Max(2, _settings.Octaves / 2),
+            FractalGain       = _settings.Persistence,
+            FractalLacunarity = _settings.Lacunarity,
+            DomainWarpEnabled   = _settings.DomainWarpAmplitude > 0f,
+            DomainWarpType      = FastNoiseLite.DomainWarpTypeEnum.SimplexReduced,
+            DomainWarpAmplitude = _settings.DomainWarpAmplitude,
+            DomainWarpFrequency = _settings.DomainWarpFrequency,
+            DomainWarpFractalType      = FastNoiseLite.DomainWarpFractalTypeEnum.Progressive,
+            DomainWarpFractalOctaves   = 3,
+            DomainWarpFractalGain      = 0.5f,
+            DomainWarpFractalLacunarity = 2.0f
         };
-        
-        // 2. Шум для рельефа (детали)
-        _terrainNoise = new FastNoiseLite
+
+        // Детали: выше частота, полные октавы → холмы, долины
+        _detailNoise = new FastNoiseLite
         {
-            Seed = _settings.Seed + 1000, // Разный сид
-            NoiseType = _settings.NoiseType,
-            Frequency = _settings.DetailFrequency, // Высокая частота
-            FractalType = _settings.FractalType,
-            FractalOctaves = _settings.Octaves,
-            FractalGain = _settings.Persistence,
+            Seed              = _settings.Seed + 1000,
+            NoiseType         = _settings.NoiseType,
+            Frequency         = _settings.DetailFrequency,
+            FractalType       = _settings.FractalType,
+            FractalOctaves    = _settings.Octaves,
+            FractalGain       = _settings.Persistence,
             FractalLacunarity = _settings.Lacunarity
         };
+
+        // Эрозия: отдельный шум, средняя частота, гладкие формы
+        // + Domain Warp (тот же стиль, но другой seed)
+        _erosionNoise = new FastNoiseLite
+        {
+            Seed              = _settings.Seed + 2000,
+            NoiseType         = _settings.NoiseType,
+            Frequency         = _settings.ErosionFrequency,
+            FractalType       = FastNoiseLite.FractalTypeEnum.Fbm,
+            FractalOctaves    = Mathf.Max(2, _settings.Octaves / 2),
+            FractalGain       = _settings.Persistence,
+            FractalLacunarity = _settings.Lacunarity,
+            DomainWarpEnabled   = _settings.DomainWarpAmplitude > 0f,
+            DomainWarpType      = FastNoiseLite.DomainWarpTypeEnum.SimplexReduced,
+            DomainWarpAmplitude = _settings.DomainWarpAmplitude,
+            DomainWarpFrequency = _settings.DomainWarpFrequency,
+            DomainWarpFractalType      = FastNoiseLite.DomainWarpFractalTypeEnum.Progressive,
+            DomainWarpFractalOctaves   = 3,
+            DomainWarpFractalGain      = 0.5f,
+            DomainWarpFractalLacunarity = 2.0f
+        };
+
+        // Weirdness (Ridges): реки через PV-складку, как в Minecraft 1.18+
+        // Низкая частота, мало октав, Domain Warp для органичных русел
+        _riverNoise = new FastNoiseLite
+        {
+            Seed              = _settings.Seed + 3000,
+            NoiseType         = _settings.NoiseType,
+            Frequency         = _settings.RiverFrequency,
+            FractalType       = FastNoiseLite.FractalTypeEnum.Fbm,
+            FractalOctaves    = 3,
+            FractalGain       = 0.5f,
+            FractalLacunarity = 2.0f,
+            DomainWarpEnabled   = _settings.DomainWarpAmplitude > 0f,
+            DomainWarpType      = FastNoiseLite.DomainWarpTypeEnum.SimplexReduced,
+            DomainWarpAmplitude = _settings.DomainWarpAmplitude * 0.7f,
+            DomainWarpFrequency = _settings.DomainWarpFrequency,
+            DomainWarpFractalType      = FastNoiseLite.DomainWarpFractalTypeEnum.Progressive,
+            DomainWarpFractalOctaves   = 2,
+            DomainWarpFractalGain      = 0.5f,
+            DomainWarpFractalLacunarity = 2.0f
+        };
+
+        // Кривые: создать по умолчанию если null (старые ресурсы)
+        _settings.EnsureCurves();
+        // Кэш уровня моря из C-кривой
+        _coastLevel = _settings.ContinentCurve.Sample(_settings.CoastStart);
     }
-    
+
+    /// <summary>
+    /// Raw continentalness value at (x, y): 0..1.
+    /// Low = ocean, high = deep inland. Domain warp is applied internally.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public float GetContinentalness(float x, float y)
+    {
+        return (_continentNoise.GetNoise2D(x, y) + 1f) * 0.5f;
+    }
+
+    /// <summary>
+    /// Raw erosion value at (x, y): 0..1.
+    /// High = heavily eroded (flat), low = un-eroded (rough).
+    /// Domain warp is applied internally.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public float GetErosion(float x, float y)
+    {
+        return (_erosionNoise.GetNoise2D(x, y) + 1f) * 0.5f;
+    }
+
+    /// <summary>
+    /// Peaks & Valleys value from Weirdness noise (Minecraft 1.18+ style).
+    /// Formula: PV = 1 − |3|W| − 2|
+    /// Returns −1 (valleys/rivers) to +1 (peaks).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public float GetRiverPV(float x, float y)
+    {
+        float W = _riverNoise.GetNoise2D(x, y); // −1..1
+        return 1f - Mathf.Abs(3f * Mathf.Abs(W) - 2f);
+    }
+
+    /// <summary>
+    /// Final height at (x, y): 0..1.
+    ///
+    /// Формула:
+    ///   potential = ContinentCurve(C)         — потенциальная высота
+    ///   seaLevel = ContinentCurve(CoastStart) — уровень моря (кэш)
+    ///   landRise = potential - seaLevel        — подъём над морем
+    ///   factor   = ErosionCurve(E)             — сколько потенциала реализовано
+    ///
+    ///   Океан (C < Coast):  height = potential  (E не влияет)
+    ///   Суша  (C ≥ Coast):  height = seaLevel + landRise × factor
+    ///                              + detail × DetailStrength × factor × coastMask
+    ///
+    ///   Реки (PV в зоне Valleys на суше): height проваливается ниже seaLevel
+    ///
+    /// Результат:
+    ///   C↑ E↓ → Горы | C↑ E↑ → Плато | C→ E↓ → Холмы | C↓ → Океан
+    ///   PV↓ на суше → Реки/озёра
+    /// </summary>
     public float GetNoise(float x, float y)
     {
-        // 1. Получаем континенты (-1..1 → 0..1)
-        float continent = (_continentNoise.GetNoise2D(x, y) + 1f) * 0.5f;
-        
-        // 2. Получаем детали рельефа
-        float terrain = _terrainNoise.GetNoise2D(x, y) * _settings.DetailStrength;
-        
-        // 3. Комбинируем: континенты + детали
-        float combined = continent + terrain;
-        
-        // 4. Нормализуем к 0..1
-        combined = Mathf.Clamp((combined + 1f) * 0.5f, 0f, 1f);
-        
-        // 5. Применяем кривую высот (если есть)
-        if (_settings.HeightCurve != null && _settings.HeightCurve.PointCount > 0)
-        {
-            combined = _settings.HeightCurve.Sample(combined);
-        }
-        
-        return combined;
+        float C = GetContinentalness(x, y);
+        float E = GetErosion(x, y);
+        return GetNoiseFromCE(C, E, x, y);
     }
-    
+
+    /// <summary>
+    /// seaLevel + landRise × ErosionCurve(E) + detail × factor × coastMask.
+    /// + River carving via PV valleys (Minecraft-style ridges folded).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private float GetNoiseFromCE(float C, float E, float x, float y)
+    {
+        float potential = _settings.ContinentCurve.Sample(C);
+
+        float baseHeight;
+        if (C < _settings.CoastStart)
+        {
+            // Океан: E не влияет, только форма дна из C-кривой
+            baseHeight = potential;
+        }
+        else
+        {
+            // Суша: потенциал × фактор эрозии
+            float landRise = potential - _coastLevel;
+            float factor = _settings.ErosionCurve.Sample(E);
+            baseHeight = _coastLevel + landRise * factor;
+        }
+
+        // Detail: микро-текстура, масштабируется фактором эрозии
+        // Горы → текстурные гребни, равнины → гладкие
+        float coastMask = Smoothstep(_settings.CoastStart, _settings.InlandStart, C);
+        float erosionFactor = _settings.ErosionCurve.Sample(E);
+        float detail = _detailNoise.GetNoise2D(x, y)
+                     * _settings.DetailStrength * erosionFactor * coastMask;
+
+        float result = baseHeight + detail;
+
+        // ═══════ Реки: PV-складка (Minecraft-style) ═══════
+        // Река вырезается на суше И продолжается через побережье в океан,
+        // чтобы не оставалось песчаной стены на месте впадения.
+        //
+        // riverExtendC — насколько глубоко в океанскую зону продлевается русло.
+        // Чем ниже C от CoastStart, тем слабее эффект (река сливается с дном).
+        float riverExtendC = _settings.CoastStart - 0.08f;
+
+        if (_settings.RiversEnabled && C >= riverExtendC)
+        {
+            float PV = GetRiverPV(x, y); // −1..+1
+
+            // PV < −(1 − RiverWidth) → долина = река
+            float valleyThreshold = -1f + _settings.RiverWidth;
+
+            if (PV < valleyThreshold)
+            {
+                // t=1 в центре реки (PV = −1), t=0 на краю (PV = threshold)
+                float t = (valleyThreshold - PV) / (valleyThreshold + 1f);
+                t = t * t; // квадратичный профиль — пологие берега, глубокий центр
+
+                if (C >= _settings.CoastStart)
+                {
+                    // Суша: вырезаем русло ниже уровня моря
+                    float riverBottom = _coastLevel * (1f - _settings.RiverDepth);
+                    result = Mathf.Lerp(_coastLevel, riverBottom, t);
+                }
+                else
+                {
+                    // Побережье/мелкий океан (CoastStart-0.08 .. CoastStart):
+                    // Река прорезает берег, плавно сливаясь с океанским дном.
+                    // coastBlend: 1 у CoastStart → 0 на riverExtendC
+                    float coastBlend = Smoothstep(riverExtendC, _settings.CoastStart, C);
+                    float riverBottom = _coastLevel * (1f - _settings.RiverDepth);
+                    float riverHeight = Mathf.Lerp(_coastLevel, riverBottom, t);
+                    // Интерполяция: у берега = русло реки, в глубине = обычное дно
+                    result = Mathf.Lerp(result, riverHeight, coastBlend);
+                }
+            }
+            else if (C >= _settings.CoastStart)
+            {
+                // Суша вне русла: не проваливаться ниже уровня моря
+                result = Mathf.Max(result, _coastLevel);
+
+                // Плавный спуск к руслу в зоне перехода (банки)
+                float bankZone = valleyThreshold + _settings.RiverWidth * 0.5f;
+                if (PV < bankZone)
+                {
+                    float blend = Smoothstep(bankZone, valleyThreshold, PV);
+                    result = Mathf.Lerp(result, _coastLevel, blend);
+                }
+            }
+        }
+        else if (C >= _settings.CoastStart)
+        {
+            // Реки отключены — старое поведение
+            result = Mathf.Max(result, _coastLevel);
+        }
+
+        return Mathf.Clamp(result, 0f, 1f);
+    }
+
+    /// <summary>Hermite smoothstep: 0 below edge0, 1 above edge1, smooth in between.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static float Smoothstep(float edge0, float edge1, float x)
+    {
+        float t = Mathf.Clamp((x - edge0) / (edge1 - edge0), 0f, 1f);
+        return t * t * (3f - 2f * t);
+    }
+
+    /// <summary>
+    /// Determines the continental zone from a raw C value.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ContinentalZone GetZone(float C)
+    {
+        if (C < _settings.CoastStart)      return ContinentalZone.Ocean;
+        if (C < _settings.InlandStart)      return ContinentalZone.Coast;
+        if (C < _settings.FarInlandStart)   return ContinentalZone.Inland;
+        return ContinentalZone.FarInland;
+    }
+
+    /// <summary>
+    /// Zone with river detection: if PV is in valley range on land → River zone.
+    /// Also returns River for the bank transition area (PV near threshold).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ContinentalZone GetZoneWithRiver(float C, float x, float y)
+    {
+        if (C < _settings.CoastStart)      return ContinentalZone.Ocean;
+        if (C < _settings.InlandStart)      return ContinentalZone.Coast;
+
+        if (_settings.RiversEnabled)
+        {
+            float PV = GetRiverPV(x, y);
+            float valleyThreshold = -1f + _settings.RiverWidth;
+            // Русло + берега реки
+            float bankZone = valleyThreshold + _settings.RiverWidth * 0.5f;
+            if (PV < bankZone)
+                return ContinentalZone.River;
+        }
+
+        if (C < _settings.FarInlandStart)   return ContinentalZone.Inland;
+        return ContinentalZone.FarInland;
+    }
+
     public void GenerateHeightmap(
         Span<int> output, 
         int offsetX, int offsetZ, 
         int width, int height, 
         int maxHeight,
-        float heightScale, // 0..1
-        int step = 1) // шаг семплирования (TILE_SIZE)
+        float heightScale,
+        int step = 1)
     {
+        GenerateHeightmap(output, Span<byte>.Empty, Span<byte>.Empty, offsetX, offsetZ, width, height, maxHeight, heightScale, step);
+    }
+
+    /// <summary>
+    /// Generates heightmap + continental zone per point.
+    /// Zone is a separate concept from biome:
+    ///   Zone  = terrain shape  (from C noise)
+    ///   Biome = surface type   (from zone + temperature + humidity — later)
+    /// </summary>
+    public void GenerateHeightmap(
+        Span<int>  output,
+        Span<byte> zoneOutput,
+        Span<byte> erosionOutput,
+        int offsetX, int offsetZ,
+        int width, int height,
+        int maxHeight,
+        float heightScale,
+        int step = 1)
+    {
+        bool writeZone    = zoneOutput.Length    >= output.Length;
+        bool writeErosion = erosionOutput.Length >= output.Length;
+
         for (int z = 0; z < height; z++)
         {
             for (int x = 0; x < width; x++)
             {
                 float worldX = offsetX + x * step;
                 float worldZ = offsetZ + z * step;
-                
-                // Получаем комбинированный шум (уже нормализованный к 0..1)
-                float noiseValue = GetNoise(worldX, worldZ);
-                
-                // Масштабируем (heightScale = какая часть диапазона используется)
-                float scaled = noiseValue * heightScale;
-                
-                // Преобразуем в целую высоту
-                int heightValue = Mathf.RoundToInt(scaled * maxHeight);
-                output[z * width + x] = Mathf.Clamp(heightValue, 0, maxHeight);
+
+                float C = GetContinentalness(worldX, worldZ);
+                float E = GetErosion(worldX, worldZ);
+                float noiseValue = GetNoiseFromCE(C, E, worldX, worldZ);
+                int   heightValue = Mathf.RoundToInt(noiseValue * heightScale * maxHeight);
+
+                int idx = z * width + x;
+                output[idx] = Mathf.Clamp(heightValue, 0, maxHeight);
+                if (writeZone)    zoneOutput[idx]    = (byte)GetZoneWithRiver(C, worldX, worldZ);
+                if (writeErosion) erosionOutput[idx] = (byte)(Mathf.Clamp(E, 0f, 1f) * 255f);
+            }
+        }
+
+        ClampGradient(output, width, height, MAX_GRADIENT);
+    }
+
+    /// <summary>
+    /// Iterative gradient clamping: ensures no two adjacent (4-connected) heightmap
+    /// points differ by more than maxDelta.
+    /// </summary>
+    private static void ClampGradient(Span<int> map, int w, int h, int maxDelta)
+    {
+        int stride = w;
+
+        bool changed = true;
+        int maxPasses = 20;
+
+        while (changed && maxPasses-- > 0)
+        {
+            changed = false;
+
+            // Forward pass: left→right, top→bottom
+            for (int z = 0; z < h; z++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    int idx = z * stride + x;
+                    int val = map[idx];
+
+                    if (x + 1 < w)
+                    {
+                        int ri = idx + 1;
+                        if (map[ri] > val + maxDelta) { map[ri] = val + maxDelta; changed = true; }
+                        else if (map[ri] < val - maxDelta) { map[ri] = val - maxDelta; changed = true; }
+                    }
+
+                    if (z + 1 < h)
+                    {
+                        int bi = idx + stride;
+                        if (map[bi] > val + maxDelta) { map[bi] = val + maxDelta; changed = true; }
+                        else if (map[bi] < val - maxDelta) { map[bi] = val - maxDelta; changed = true; }
+                    }
+                }
+            }
+
+            // Backward pass: right→left, bottom→top
+            for (int z = h - 1; z >= 0; z--)
+            {
+                for (int x = w - 1; x >= 0; x--)
+                {
+                    int idx = z * stride + x;
+                    int val = map[idx];
+
+                    if (x > 0)
+                    {
+                        int li = idx - 1;
+                        if (map[li] > val + maxDelta) { map[li] = val + maxDelta; changed = true; }
+                        else if (map[li] < val - maxDelta) { map[li] = val - maxDelta; changed = true; }
+                    }
+
+                    if (z > 0)
+                    {
+                        int ti = idx - stride;
+                        if (map[ti] > val + maxDelta) { map[ti] = val + maxDelta; changed = true; }
+                        else if (map[ti] < val - maxDelta) { map[ti] = val - maxDelta; changed = true; }
+                    }
+                }
             }
         }
     }

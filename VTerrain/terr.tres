@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="NoiseSettings" format=3 uid="uid://lhoat85msirm"]
+
+[ext_resource type="Script" uid="uid://qf86h2aoijle" path="res://VTerrain/Tools/Noise/Settings/NoiseSettings.cs" id="1_6vf20"]
+
+[sub_resource type="Curve" id="Curve_cont"]
+_data = [Vector2(0, 1), 0.0, 0.0, 0, 0, Vector2(0.02034261, 0.017985582), 0.0, 0.0, 0, 0, Vector2(0.3308351, 0.035213947), 0.0, 0.0, 0, 0, Vector2(0.49122804, 0.103773594), 0.98517656, 0.98517656, 0, 0, Vector2(0.56920075, 0.16509438), 0.7731999, 0.0, 0, 0, Vector2(0.6179337, 0.1745283), 0.17709906, 0.17709906, 0, 0, Vector2(0.73099416, 0.18867928), 0.106791124, 0.106791124, 0, 0, Vector2(0.8119266, 0.3213703), 2.9160771, 2.9160771, 0, 0, Vector2(0.8849903, 0.6179246), 0.8066042, 0.8066042, 0, 0, Vector2(0.95182014, 0.79572135), 4.5974965, 4.5974965, 0, 0, Vector2(0.9678801, 0.9310867), 6.896225, 6.896225, 0, 0, Vector2(1, 1), 0.5947665, 0.0, 0, 0]
+point_count = 12
+
+[sub_resource type="Curve" id="Curve_eros"]
+_data = [Vector2(0, 1), 0.0, -5.9061804, 0, 0, Vector2(0.14035088, 0.8160378), -2.2890112, -2.2890112, 0, 0, Vector2(0.22807017, 0.6603774), -2.7101893, -2.7101893, 0, 0, Vector2(0.30994153, 0.4433962), -2.1509435, -2.1509435, 0, 0, Vector2(0.44639376, 0.19339621), 0.0, 0.0, 0, 0, Vector2(0.6374269, 0.20754719), 0.0, 0.0, 0, 0, Vector2(0.7017544, 0.46226418), -0.05280085, -0.05280085, 0, 0, Vector2(0.8050682, 0.4575472), -0.17843106, -0.17843106, 0, 0, Vector2(0.87329435, 0.18396229), -1.5611681, -1.5611681, 0, 0, Vector2(0.94931775, 0.1273585), 0.0, 0.0, 0, 0, Vector2(1, 0.025761127), 0.0, 0.0, 0, 0]
+point_count = 11
+
+[resource]
+script = ExtResource("1_6vf20")
+Seed = 1336
+Frequency = 0.0005
+DetailFrequency = 0.006
+DetailStrength = 0.07
+ErosionFrequency = 0.0011
+RiverWidth = 0.13
+RiverDepth = 0.25
+DomainWarpAmplitude = 90.0
+DomainWarpFrequency = 0.0052
+Octaves = 4
+Persistence = 0.42
+Lacunarity = 2.1
+CoastStart = 0.55
+InlandStart = 0.6
+FarInlandStart = 0.8200000000000001
+ContinentCurve = SubResource("Curve_cont")
+ErosionCurve = SubResource("Curve_eros")
+metadata/_custom_type_script = "uid://qf86h2aoijle"

@@ -9,7 +9,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 	public int MaxPerFrame { get; set; } = 4;
 	public Node ParentNode { get; set; }
 	public Node3D Viewer { get; set; }
-	public bool DebugCollision { get; set; } = true; 
+	public bool DebugCollision { get; set; } = false; 
 	
 	private EntityStore _store;
 	private int[] _selectedEntityIds;
@@ -123,8 +123,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		{
 			for (int x = 0; x < size; x++)
 			{
-				int tileIndex = z * size + x;
-				int dataOffset = tileIndex * 2;
+				int dataOffset = (z * size + x) * ChunkConstants.BYTES_PER_TILE;
 				
 				int baseHeight = terrainData[dataOffset];
 				TileType tileType = (TileType)terrainData[dataOffset + 1];
