@@ -53,6 +53,7 @@ public partial class GameplaySession : Node
             new GameplayMovementSystem(),
             new GameplayEntityRotationSystem(),
             new GameplayCameraFollowSystem(),
+            new TileCursorSystem(),
         };
     }
 
@@ -67,7 +68,8 @@ public partial class GameplaySession : Node
     public Entity RegisterPlayer(CharacterBody3D body,
                                   float speed, float gravity, float maxFall,
                                   float jumpForce, float jumpBuffer,
-                                  float noclipSpeedMul, float noclipVertSpeed)
+                                  float noclipSpeedMul, float noclipVertSpeed,
+                                  float rotationSpeed)
     {
         var entity = _store.CreateEntity(
             new GodotBody      { InstanceId = body.GetInstanceId() },
@@ -76,6 +78,7 @@ public partial class GameplaySession : Node
             new PlayerJump     { JumpForce = jumpForce, BufferDuration = jumpBuffer },
             new PlayerNoclip   { SpeedMultiplier = noclipSpeedMul, VerticalSpeed = noclipVertSpeed },
             new PlayerHealth   { Current = 100f, Maximum = 100f },
+            new PlayerRotation { Speed = rotationSpeed },
             Tags.Get<PlayerTag>()
         );
         GD.Print($"[Gameplay] Player entity {entity.Id} registered");
@@ -152,7 +155,7 @@ public partial class GameplaySession : Node
         _mouseMotionAccum = Vector2.Zero;
         _scrollAccum      = 0f;
 
-        _systems.Update(new UpdateTick(_tick++, (float)delta));
+        _systems.Update(new UpdateTick((float)delta, _tick++));
     }
 
     // ════════════════════════════════════════════════════════════════════

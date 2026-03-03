@@ -196,7 +196,7 @@ public partial class GameSession : Node
 		if (AutoAdjustBudgets)
 			AutoTuneBudgets((float)delta);
 
-		_systems.Update(new UpdateTick(_tick++, (float)delta));
+		_systems.Update(new UpdateTick((float)delta, _tick++));
 
 		UpdateDebugLabel();
 	}

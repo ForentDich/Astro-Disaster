@@ -5,7 +5,6 @@ using Godot;
 /// <summary>
 /// Applies gravity to entities with PlayerGravity + PlayerVelocity + GodotBody.
 /// Skips entities in noclip mode.
-/// Mirrors: SystemsG/s_gravity.gd
 /// </summary>
 public class GameplayGravitySystem : QuerySystem<PlayerGravity, PlayerVelocity, GodotBody>
 {

@@ -35,3 +35,8 @@ public struct PlayerHealth : IComponent
     public float Current;
     public float Maximum;
 }
+
+public struct PlayerRotation : IComponent
+{
+    public float Speed;
+}

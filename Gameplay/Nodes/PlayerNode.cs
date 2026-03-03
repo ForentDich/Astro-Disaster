@@ -21,6 +21,9 @@ public partial class PlayerNode : CharacterBody3D
     [Export] public float NoclipSpeedMultiplier { get; set; } = 5.0f;
     [Export] public float NoclipVerticalSpeed   { get; set; } = 10.0f;
 
+    [ExportGroup("Rotation")]
+    [Export] public float RotationSpeed { get; set; } = 12.0f;
+
     /// <summary>Friflo entity representing this player.</summary>
     public Entity Entity { get; private set; }
 
@@ -45,7 +48,8 @@ public partial class PlayerNode : CharacterBody3D
             this,
             Speed, GravityForce, MaxFallSpeed,
             JumpForce, JumpBufferDuration,
-            NoclipSpeedMultiplier, NoclipVerticalSpeed
+            NoclipSpeedMultiplier, NoclipVerticalSpeed,
+            RotationSpeed
         );
     }
 
