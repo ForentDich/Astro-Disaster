@@ -1,0 +1,16 @@
+[gd_scene format=3 uid="uid://cbk7rcuv37u3c"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_qbkls"]
+size = Vector3(0.4, 1.7, 0.21)
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_qbkls"]
+radius = 0.2290039
+height = 1.7
+
+[node name="Player" type="CharacterBody3D" unique_id=73761922]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1234859693]
+mesh = SubResource("BoxMesh_qbkls")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=558042296]
+shape = SubResource("CapsuleShape3D_qbkls")

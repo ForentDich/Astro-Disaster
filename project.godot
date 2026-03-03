@@ -19,10 +19,6 @@ run/main_scene="uid://n6444fbllu4i"
 config/features=PackedStringArray("4.6", "C#", "Forward Plus")
 config/icon="res://icon.svg"
 
-[autoload]
-
-ECS="*uid://dfqwl5njvdnmq"
-
 [display]
 
 window/size/viewport_width=1280
@@ -45,8 +41,11 @@ enabled=PackedStringArray("res://addons/gecs/plugin.cfg")
 folder_colors={
 "res://Components/": "teal",
 "res://Entities/": "orange",
+"res://Gameplay/": "green",
+"res://Scenes/": "pink",
 "res://Systems/": "purple",
-"res://VTerrain/": "yellow"
+"res://Terrain/": "yellow",
+"res://addons/": "gray"
 }
 
 [input]
