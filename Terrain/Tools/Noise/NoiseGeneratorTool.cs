@@ -209,62 +209,69 @@ public class NoiseGenerator
         float result = baseHeight + detail;
 
         // ═══════ Реки: PV-складка (Minecraft-style) ═══════
-        // Река вырезается на суше И продолжается через побережье в океан,
-        // чтобы не оставалось песчаной стены на месте впадения.
         //
-        // riverExtendC — насколько глубоко в океанскую зону продлевается русло.
-        // Чем ниже C от CoastStart, тем слабее эффект (река сливается с дном).
+        // Ключевой принцип: реки текут по НИЗИНАМ, не через горы.
+        // Вместо хака по erosion, маскируем по фактической высоте terrain
+        // над уровнем моря. Чем выше terrain — тем слабее река.
+        //
+        // Это физически корректно: вода не может подняться выше
+        // уровня моря, реки всегда стекают вниз.
         float riverExtendC = _settings.CoastStart - 0.08f;
+
+        if (C >= _settings.CoastStart)
+        {
+            // Суша: не проваливаться ниже уровня моря (базовое правило)
+            result = Mathf.Max(result, _coastLevel);
+        }
 
         if (_settings.RiversEnabled && C >= riverExtendC)
         {
             float PV = GetRiverPV(x, y); // −1..+1
-
-            // PV < −(1 − RiverWidth) → долина = река
             float valleyThreshold = -1f + _settings.RiverWidth;
+            float bankZone = valleyThreshold + _settings.RiverWidth * 0.5f;
 
-            if (PV < valleyThreshold)
+            if (PV < bankZone)
             {
-                // t=1 в центре реки (PV = −1), t=0 на краю (PV = threshold)
-                float t = (valleyThreshold - PV) / (valleyThreshold + 1f);
-                t = t * t; // квадратичный профиль — пологие берега, глубокий центр
+                // Маска по высоте: реки возможны только вблизи уровня моря.
+                // aboveSea ≈ 0.02 (равнины) → mask ≈ 1.0 → полная река
+                // aboveSea ≈ 0.10 (холмы)   → mask ≈ 0.0 → нет реки
+                // aboveSea ≈ 0.30 (горы)     → mask = 0.0 → чистые горы
+                float aboveSea = result - _coastLevel;
+                float maxRiverableHeight = 0.07f;
+                float heightMask = 1f - Smoothstep(0f, maxRiverableHeight, aboveSea);
 
-                if (C >= _settings.CoastStart)
+                if (heightMask > 0.01f)
                 {
-                    // Суша: вырезаем русло ниже уровня моря
+                    float preRiverResult = result;
                     float riverBottom = _coastLevel * (1f - _settings.RiverDepth);
-                    result = Mathf.Lerp(_coastLevel, riverBottom, t);
-                }
-                else
-                {
-                    // Побережье/мелкий океан (CoastStart-0.08 .. CoastStart):
-                    // Река прорезает берег, плавно сливаясь с океанским дном.
-                    // coastBlend: 1 у CoastStart → 0 на riverExtendC
-                    float coastBlend = Smoothstep(riverExtendC, _settings.CoastStart, C);
-                    float riverBottom = _coastLevel * (1f - _settings.RiverDepth);
-                    float riverHeight = Mathf.Lerp(_coastLevel, riverBottom, t);
-                    // Интерполяция: у берега = русло реки, в глубине = обычное дно
-                    result = Mathf.Lerp(result, riverHeight, coastBlend);
+
+                    if (PV < valleyThreshold)
+                    {
+                        // Внутри русла: t=1 в центре (PV=−1), t=0 на краю
+                        float t = (valleyThreshold - PV) / (valleyThreshold + 1f);
+                        t = t * t; // квадратичный профиль
+
+                        if (C >= _settings.CoastStart)
+                        {
+                            float riverHeight = Mathf.Lerp(_coastLevel, riverBottom, t);
+                            result = Mathf.Lerp(preRiverResult, riverHeight, heightMask);
+                        }
+                        else
+                        {
+                            // Побережье: река сливается с океаном
+                            float coastBlend = Smoothstep(riverExtendC, _settings.CoastStart, C);
+                            float riverHeight = Mathf.Lerp(_coastLevel, riverBottom, t);
+                            result = Mathf.Lerp(result, riverHeight, coastBlend);
+                        }
+                    }
+                    else
+                    {
+                        // Банки (PV между valleyThreshold и bankZone)
+                        float blend = Smoothstep(bankZone, valleyThreshold, PV) * heightMask;
+                        result = Mathf.Lerp(preRiverResult, _coastLevel, blend);
+                    }
                 }
             }
-            else if (C >= _settings.CoastStart)
-            {
-                // Суша вне русла: не проваливаться ниже уровня моря
-                result = Mathf.Max(result, _coastLevel);
-
-                // Плавный спуск к руслу в зоне перехода (банки)
-                float bankZone = valleyThreshold + _settings.RiverWidth * 0.5f;
-                if (PV < bankZone)
-                {
-                    float blend = Smoothstep(bankZone, valleyThreshold, PV);
-                    result = Mathf.Lerp(result, _coastLevel, blend);
-                }
-            }
-        }
-        else if (C >= _settings.CoastStart)
-        {
-            // Реки отключены — старое поведение
-            result = Mathf.Max(result, _coastLevel);
         }
 
         return Mathf.Clamp(result, 0f, 1f);
@@ -292,22 +299,29 @@ public class NoiseGenerator
 
     /// <summary>
     /// Zone with river detection: if PV is in valley range on land → River zone.
-    /// Also returns River for the bank transition area (PV near threshold).
+    /// Suppresses rivers in high terrain (mountains, hills) — rivers only on lowlands.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ContinentalZone GetZoneWithRiver(float C, float x, float y)
+    public ContinentalZone GetZoneWithRiver(float C, float E, float x, float y)
     {
         if (C < _settings.CoastStart)      return ContinentalZone.Ocean;
         if (C < _settings.InlandStart)      return ContinentalZone.Coast;
 
         if (_settings.RiversEnabled)
         {
-            float PV = GetRiverPV(x, y);
-            float valleyThreshold = -1f + _settings.RiverWidth;
-            // Русло + берега реки
-            float bankZone = valleyThreshold + _settings.RiverWidth * 0.5f;
-            if (PV < bankZone)
-                return ContinentalZone.River;
+            // Only mark as river if terrain is low enough for rivers to form
+            float height = GetNoiseFromCE(C, E, x, y);
+            float aboveSea = height - _coastLevel;
+            float maxRiverableHeight = 0.07f;
+
+            if (aboveSea < maxRiverableHeight)
+            {
+                float PV = GetRiverPV(x, y);
+                float valleyThreshold = -1f + _settings.RiverWidth;
+                float bankZone = valleyThreshold + _settings.RiverWidth * 0.5f;
+                if (PV < bankZone)
+                    return ContinentalZone.River;
+            }
         }
 
         if (C < _settings.FarInlandStart)   return ContinentalZone.Inland;
@@ -358,7 +372,7 @@ public class NoiseGenerator
 
                 int idx = z * width + x;
                 output[idx] = Mathf.Clamp(heightValue, 0, maxHeight);
-                if (writeZone)    zoneOutput[idx]    = (byte)GetZoneWithRiver(C, worldX, worldZ);
+                if (writeZone)    zoneOutput[idx]    = (byte)GetZoneWithRiver(C, E, worldX, worldZ);
                 if (writeErosion) erosionOutput[idx] = (byte)(Mathf.Clamp(E, 0f, 1f) * 255f);
             }
         }

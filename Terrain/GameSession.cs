@@ -30,6 +30,8 @@ public partial class GameSession : Node
 	[ExportGroup("Rendering")]
 	[Export] public Material TerrainMaterial { get; set; }
 	[Export] public Material WaterMaterial { get; set; }
+	[Export] public Material TrunkMaterial { get; set; }
+	[Export] public Material CanopyMaterial { get; set; }
 
 	// Добавляем параметры для мира
 	[ExportGroup("World")]
@@ -172,6 +174,24 @@ public partial class GameSession : Node
 			ParentNode = this
 		};
 
+		// ── Trees ──
+		var treeRoot = new Node3D { Name = "Trees" };
+		AddChild(treeRoot);
+
+		var treeSpawnSystem = new TreeSpawnSystem
+		{
+			SeaLevelTile     = ComputeSeaLevelTile(),
+			SurfaceTreeMap   = SurfaceRegistry.TreeTypeMap,
+			SurfaceDensityMap = SurfaceRegistry.TreeDensityMap
+		};
+
+		var treeRenderSystem = new TreeRenderSystem
+		{
+			TrunkMaterial  = TrunkMaterial,
+			CanopyMaterial = CanopyMaterial,
+			TreeRoot       = treeRoot
+		};
+
 		_meshBudget = Mathf.Max(1, MaxMeshBuildPerFrame);
 
 		_systems = new SystemRoot(_store)
@@ -186,6 +206,8 @@ public partial class GameSession : Node
 			_chunkDataGen,
 			_meshBuildSystem,
 			collisionBuildSystem,
+			treeSpawnSystem,
+			treeRenderSystem,
 		};
 	}
 
@@ -303,6 +325,11 @@ public partial class GameSession : Node
 				mesh.GetMesh()?.QueueFree();
 			if (entity.TryGetComponent<ChunkCollider>(out var collider))
 				collider.GetBody()?.QueueFree();
+			if (entity.TryGetComponent<ChunkTreeMesh>(out var treeMesh) && treeMesh.InstanceIds != null)
+			{
+				foreach (ulong id in treeMesh.InstanceIds)
+					(GodotObject.InstanceFromId(id) as Node)?.QueueFree();
+			}
 		}
 	}
 }

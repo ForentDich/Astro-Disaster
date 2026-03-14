@@ -22,6 +22,8 @@ public static class SurfaceRegistry
         public int SlopeVariant;     // -1 = self
         public float NoiseStrength;  // 0.0 = no noise tint, 1.0 = full
         public string TexturePath;   // null = tint only
+        public TreeType TreeType;    // tree type for this surface
+        public float TreeDensity;    // 0..1 probability per flat tile
     }
 
     public static SurfaceEntry[] Surfaces { get; private set; } = Array.Empty<SurfaceEntry>();
@@ -33,7 +35,24 @@ public static class SurfaceRegistry
     public static void Load()
     {
         LoadSurfaces();
+        BuildTreeMaps();
         GD.Print($"[SurfaceRegistry] Loaded {Surfaces.Length} surfaces");
+    }
+
+    /// <summary>Surface index → TreeType lookup (parallel to Surfaces).</summary>
+    public static TreeType[] TreeTypeMap { get; private set; } = Array.Empty<TreeType>();
+    /// <summary>Surface index → tree density lookup (parallel to Surfaces).</summary>
+    public static float[] TreeDensityMap { get; private set; } = Array.Empty<float>();
+
+    private static void BuildTreeMaps()
+    {
+        TreeTypeMap    = new TreeType[Surfaces.Length];
+        TreeDensityMap = new float[Surfaces.Length];
+        for (int i = 0; i < Surfaces.Length; i++)
+        {
+            TreeTypeMap[i]    = Surfaces[i].TreeType;
+            TreeDensityMap[i] = Surfaces[i].TreeDensity;
+        }
     }
 
     private static void LoadSurfaces()
@@ -68,7 +87,11 @@ public static class SurfaceRegistry
                 SlopeVariant = el.GetProperty("slopeVariant").GetInt32(),
                 NoiseStrength = el.TryGetProperty("noiseStrength", out var nsProp)
                     ? nsProp.GetSingle() : 1.0f,
-                TexturePath = texFile != null ? $"{TEXTURE_DIR}{texFile}" : null
+                TexturePath = texFile != null ? $"{TEXTURE_DIR}{texFile}" : null,
+                TreeType = el.TryGetProperty("treeType", out var ttProp)
+                    ? Enum.Parse<TreeType>(ttProp.GetString(), true) : TreeType.None,
+                TreeDensity = el.TryGetProperty("treeDensity", out var tdProp)
+                    ? tdProp.GetSingle() : 0f,
             };
         }
     }

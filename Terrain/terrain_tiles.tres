@@ -10,3 +10,7 @@ shader_parameter/tile_world_size = 3.0
 shader_parameter/tint_variation = 0.5
 shader_parameter/tint_scale = 4.000000142499999
 shader_parameter/roughness_base = 1.0
+shader_parameter/blend_width = 0.48000002117006
+shader_parameter/border_noise_freq = 0.550000002375
+shader_parameter/border_pixel_size = 0.20000000624012
+shader_parameter/border_amplitude = 2.0

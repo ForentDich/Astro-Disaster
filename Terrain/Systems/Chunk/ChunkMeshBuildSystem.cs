@@ -27,6 +27,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 
 	private readonly ArrayPool<Vector3> _vertexPool = ArrayPool<Vector3>.Shared;
 	private readonly ArrayPool<Vector3> _normalPool = ArrayPool<Vector3>.Shared;
+	private readonly ArrayPool<Color> _colorPool = ArrayPool<Color>.Shared;
 
 	public ChunkMeshBuildSystem() => Filter.AllTags(Tags.Get<NeedsMeshUpdate>());
 
@@ -88,8 +89,10 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				// Look up right / bottom neighbor data for boundary walls
 				byte[] rightData = GetNeighborData(info.X + 1, info.Z);
 				byte[] bottomData = GetNeighborData(info.X, info.Z + 1);
+				byte[] topData = GetNeighborData(info.X, info.Z - 1);
+				byte[] leftData = GetNeighborData(info.X - 1, info.Z);
 
-				Mesh mesh = BuildMeshFromData(terrain.Data, rightData, bottomData);
+				Mesh mesh = BuildMeshFromData(terrain.Data, rightData, bottomData, topData, leftData);
 
 				if (entity.TryGetComponent<ChunkMesh>(out var chunkMesh))
 				{
@@ -147,7 +150,56 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		return null;
 	}
 
-	private Mesh BuildMeshFromData(byte[] terrainData, byte[] rightNeighborData, byte[] bottomNeighborData)
+	/// <summary>
+	/// Returns the surface ID at tile (x, z), looking into neighbor chunk data when out of bounds.
+	/// Falls back to <paramref name="fallback"/> if no neighbor data is available.
+	/// </summary>
+	private static byte GetSurfaceIdAt(
+		ReadOnlySpan<byte> chunkData, int x, int z,
+		int size, int stride,
+		byte[] topData, byte[] rightData, byte[] bottomData, byte[] leftData,
+		byte fallback)
+	{
+		if (x >= 0 && x < size && z >= 0 && z < size)
+		{
+			int off = (z * size + x) * stride;
+			return (byte)(chunkData[off + 2] & ChunkConstants.SURFACE_MASK);
+		}
+
+		byte[] neighborData = null;
+		int nx = x, nz = z;
+
+		if (z < 0 && x >= 0 && x < size)
+		{
+			neighborData = topData;
+			nz = size + z;
+		}
+		else if (z >= size && x >= 0 && x < size)
+		{
+			neighborData = bottomData;
+			nz = z - size;
+		}
+		else if (x < 0 && z >= 0 && z < size)
+		{
+			neighborData = leftData;
+			nx = size + x;
+		}
+		else if (x >= size && z >= 0 && z < size)
+		{
+			neighborData = rightData;
+			nx = x - size;
+		}
+
+		if (neighborData != null)
+		{
+			int off = (nz * size + nx) * stride;
+			return (byte)(neighborData[off + 2] & ChunkConstants.SURFACE_MASK);
+		}
+
+		return fallback;
+	}
+
+	private Mesh BuildMeshFromData(byte[] terrainData, byte[] rightNeighborData, byte[] bottomNeighborData, byte[] topNeighborData, byte[] leftNeighborData)
 	{
 		ReadOnlySpan<byte> dataSpan = terrainData;
 		
@@ -158,11 +210,13 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		
 		Vector3[] verticesArray = _vertexPool.Rent(totalVertices);
 		Vector3[] normalsArray = _normalPool.Rent(totalVertices);
+		Color[] colorsArray = _colorPool.Rent(totalVertices);
 		
 		try
 		{
 			Span<Vector3> vertices = verticesArray.AsSpan(0, totalVertices);
 			Span<Vector3> normals = normalsArray.AsSpan(0, totalVertices);
+			Span<Color> colors = colorsArray.AsSpan(0, totalVertices);
 
 			// Parallel arrays for UV/UV2 (same size as vertices)
 			Span<Vector2> uvs  = stackalloc Vector2[totalVertices];
@@ -188,6 +242,13 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 					Vector3 tileOffset = new Vector3(x * ts, baseHeight * th, z * ts);
 
 					Vector2 surfaceVec = new Vector2(surfaceId, 0);
+
+					// Neighbor surface IDs for border blending (encoded in vertex color)
+					byte nSurf = GetSurfaceIdAt(dataSpan, x, z - 1, size, stride, topNeighborData, rightNeighborData, bottomNeighborData, leftNeighborData, surfaceId);
+					byte eSurf = GetSurfaceIdAt(dataSpan, x + 1, z, size, stride, topNeighborData, rightNeighborData, bottomNeighborData, leftNeighborData, surfaceId);
+					byte sSurf = GetSurfaceIdAt(dataSpan, x, z + 1, size, stride, topNeighborData, rightNeighborData, bottomNeighborData, leftNeighborData, surfaceId);
+					byte wSurf = GetSurfaceIdAt(dataSpan, x - 1, z, size, stride, topNeighborData, rightNeighborData, bottomNeighborData, leftNeighborData, surfaceId);
+					Color neighborColor = new Color(nSurf / 255f, eSurf / 255f, sSurf / 255f, wSurf / 255f);
 					
 					for (int v = 0; v < tileVertices.Length; v++)
 					{
@@ -195,6 +256,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 						normals[vertexIndex + v] = tileNormals[v];
 						uvs[vertexIndex + v] = tileUVs[v];
 						uv2s[vertexIndex + v] = surfaceVec;
+						colors[vertexIndex + v] = neighborColor;
 					}
 					
 					vertexIndex += tileVertices.Length;
@@ -211,6 +273,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				surfaceTool.SetNormal(normals[i]);
 				surfaceTool.SetUV(uvs[i]);
 				surfaceTool.SetUV2(uv2s[i]);
+				surfaceTool.SetColor(colors[i]);
 				surfaceTool.AddVertex(vertices[i]);
 			}
 
@@ -279,6 +342,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		{
 			_vertexPool.Return(verticesArray);
 			_normalPool.Return(normalsArray);
+			_colorPool.Return(colorsArray);
 		}
 	}
 

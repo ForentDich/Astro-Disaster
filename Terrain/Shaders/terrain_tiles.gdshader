@@ -15,10 +15,18 @@ uniform float tint_scale : hint_range(1.0, 100.0) = 20.0;
 uniform float roughness_base : hint_range(0.0, 1.0) = 0.9;
 group_uniforms;
 
+group_uniforms blending;
+uniform float blend_width : hint_range(0.05, 0.5) = 0.25;
+uniform float border_noise_freq : hint_range(0.5, 10.0) = 3.0;
+uniform float border_pixel_size : hint_range(0.1, 3.0) = 0.5;
+uniform float border_amplitude : hint_range(0.1, 2.0) = 0.6;
+group_uniforms;
+
 varying float v_surface_id;
 varying flat float v_tile_hash;    // per-tile random for rotation
 varying flat vec2  v_tile_offset;  // per-tile pixel offset (snapped to 1/32)
 varying vec2 v_world_xz;           // world position for smooth noise
+varying flat vec4 v_neighbor_ids;  // R=north, G=east, B=south, A=west surface IDs
 
 // Fast hash from tile grid position
 float tile_hash(vec2 grid) {
@@ -59,6 +67,7 @@ float tint_noise(vec2 world_pos) {
 
 void vertex() {
     v_surface_id = UV2.x;
+    v_neighbor_ids = COLOR;
 
     // World position — all per-tile effects must use this, not local VERTEX
     vec3 world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -88,17 +97,50 @@ vec2 rotate_uv(vec2 uv, int rot) {
 void fragment() {
     int surf_id = int(round(v_surface_id));
 
+    // ── Decode neighbor surface IDs ──
+    int north_id = int(round(v_neighbor_ids.r * 255.0));
+    int east_id  = int(round(v_neighbor_ids.g * 255.0));
+    int south_id = int(round(v_neighbor_ids.b * 255.0));
+    int west_id  = int(round(v_neighbor_ids.a * 255.0));
+
+    int final_id = surf_id;
+
+    // ── Organic border blending ──
+    if (north_id != surf_id || east_id != surf_id || south_id != surf_id || west_id != surf_id) {
+        // Snap to pixel grid — all computations use cell center → clean blocks
+        vec2 cell_center = (floor(v_world_xz / border_pixel_size) + 0.5) * border_pixel_size;
+        vec2 tile_frac = fract(cell_center / tile_world_size);
+        float dist_n = tile_frac.y;
+        float dist_s = 1.0 - tile_frac.y;
+        float dist_w = tile_frac.x;
+        float dist_e = 1.0 - tile_frac.x;
+
+        // Find the closest edge where neighbor has HIGHER surface ID
+        // (only one side blends → no double stripe)
+        float best_dist = 999.0;
+        int blend_id = surf_id;
+
+        if (north_id > surf_id && dist_n < best_dist) { best_dist = dist_n; blend_id = north_id; }
+        if (south_id > surf_id && dist_s < best_dist) { best_dist = dist_s; blend_id = south_id; }
+        if (west_id  > surf_id && dist_w < best_dist) { best_dist = dist_w; blend_id = west_id; }
+        if (east_id  > surf_id && dist_e < best_dist) { best_dist = dist_e; blend_id = east_id; }
+
+        // Warp border with noise sampled at same cell center
+        float warp = grad_noise(cell_center * border_noise_freq) * 2.0 - 1.0;
+        float warped_edge = blend_width * (1.0 + warp * border_amplitude);
+
+        if (best_dist < warped_edge) {
+            final_id = blend_id;
+        }
+    }
+
     // ── Per-tile UV rotation + pixel offset ──
-    int rotation = int(v_tile_hash * 4.0);  // 0..3
+    int rotation = int(v_tile_hash * 4.0);
     vec2 tex_uv = rotate_uv(UV, rotation) + v_tile_offset;
 
-    vec4 tex = texture(terrain_textures, vec3(tex_uv, float(surf_id)));
-    vec4 tint = get_tint(surf_id);
+    vec4 tex = texture(terrain_textures, vec3(tex_uv, float(final_id)));
+    vec4 tint = get_tint(final_id);
 
-    // Convert texture to grayscale so tint fully controls the color.
-    // Texture provides shape/detail only, tint provides color and brightness.
-    // ×2.0 normalizes typical textures (avg luminance ~0.5) to ~1.0,
-    // so tint [1,1,1] = white, [0.5,0.5,0.5] = gray, etc.
     float detail = dot(tex.rgb, vec3(0.299, 0.587, 0.114)) * 2.0;
 
     // ── Smooth tint variation (noise patches) ──

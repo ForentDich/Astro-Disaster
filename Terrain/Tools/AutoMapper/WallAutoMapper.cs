@@ -32,7 +32,7 @@ public static class WallAutoMapper
             {
                 int idx = (z * size + x) * STRIDE;
                 int baseH    = data[idx];
-                byte surfA   = data[idx + 2]; // surfaceId of current tile
+                byte surfA   = (byte)(data[idx + 2] & ChunkConstants.SURFACE_MASK);
                 float[] ch   = TileMeshes.GetHeights((TileType)data[idx + 1]);
 
                 float cNW = (baseH + ch[0]) * H;
@@ -48,7 +48,7 @@ public static class WallAutoMapper
                 {
                     int ni = (z * size + x + 1) * STRIDE;
                     int nb = data[ni];
-                    byte surfB = data[ni + 2];
+                    byte surfB = (byte)(data[ni + 2] & ChunkConstants.SURFACE_MASK);
                     float[] nh = TileMeshes.GetHeights((TileType)data[ni + 1]);
 
                     EmitWallEdge(st,
@@ -61,7 +61,7 @@ public static class WallAutoMapper
                 {
                     int ni = (z * size + 0) * STRIDE;
                     int nb = rightNeighbor[ni];
-                    byte surfB = rightNeighbor[ni + 2];
+                    byte surfB = (byte)(rightNeighbor[ni + 2] & ChunkConstants.SURFACE_MASK);
                     float[] nh = TileMeshes.GetHeights((TileType)rightNeighbor[ni + 1]);
 
                     EmitWallEdge(st,
@@ -76,7 +76,7 @@ public static class WallAutoMapper
                 {
                     int ni = ((z + 1) * size + x) * STRIDE;
                     int nb = data[ni];
-                    byte surfB = data[ni + 2];
+                    byte surfB = (byte)(data[ni + 2] & ChunkConstants.SURFACE_MASK);
                     float[] nh = TileMeshes.GetHeights((TileType)data[ni + 1]);
 
                     EmitWallEdge(st,
@@ -90,7 +90,7 @@ public static class WallAutoMapper
                 {
                     int ni = (0 * size + x) * STRIDE;
                     int nb = bottomNeighbor[ni];
-                    byte surfB = bottomNeighbor[ni + 2];
+                    byte surfB = (byte)(bottomNeighbor[ni + 2] & ChunkConstants.SURFACE_MASK);
                     float[] nh = TileMeshes.GetHeights((TileType)bottomNeighbor[ni + 1]);
 
                     EmitWallEdge(st,
@@ -197,9 +197,14 @@ public static class WallAutoMapper
         Vector2 uvA, Vector2 uvB, Vector2 uvC,
         Vector2 uv2)
     {
+        // All neighbor IDs = own surface → no border blending on walls
+        float nf = uv2.X / 255f;
+        Color noBlend = new Color(nf, nf, nf, nf);
+
         st.SetNormal(normal);
         st.SetUV(uvA);
         st.SetUV2(uv2);
+        st.SetColor(noBlend);
         st.AddVertex(a);
 
         st.SetNormal(normal);

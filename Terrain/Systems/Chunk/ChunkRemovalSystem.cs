@@ -40,6 +40,12 @@ public class ChunkRemovalSystem : QuerySystem<ChunkInfo>
 					var body = collider.GetBody();
 					body?.QueueFree();
 				}
+
+				if (entity.TryGetComponent<ChunkTreeMesh>(out var treeMesh) && treeMesh.InstanceIds != null)
+				{
+					foreach (ulong id in treeMesh.InstanceIds)
+						(GodotObject.InstanceFromId(id) as Node)?.QueueFree();
+				}
 				
 				buffer.DeleteEntity(entity.Id);
 				_removalCount++;
