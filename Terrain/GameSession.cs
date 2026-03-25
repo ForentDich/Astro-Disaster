@@ -89,6 +89,9 @@ public partial class GameSession : Node
 		// Build lookup tables for fast surface assignment
 		SurfaceMapper.Initialize();
 
+		// Load tree type materials (textures + colors)
+		TreeTypeRegistry.Load();
+
 		// Build Texture2DArray + LUT textures and assign to shader
 		if (TerrainMaterial is ShaderMaterial shaderMat)
 		{
@@ -187,9 +190,7 @@ public partial class GameSession : Node
 
 		var treeRenderSystem = new TreeRenderSystem
 		{
-			TrunkMaterial  = TrunkMaterial,
-			CanopyMaterial = CanopyMaterial,
-			TreeRoot       = treeRoot
+			TreeRoot = treeRoot
 		};
 
 		_meshBudget = Mathf.Max(1, MaxMeshBuildPerFrame);

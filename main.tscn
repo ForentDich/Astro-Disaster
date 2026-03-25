@@ -1,5 +1,6 @@
 [gd_scene format=3 uid="uid://n6444fbllu4i"]
 
+[ext_resource type="Shader" uid="uid://bxcy27uv0j228" path="res://Terrain/Shaders/trunk_textured.gdshader" id="6_dg77c"]
 [ext_resource type="Script" uid="uid://b7nhm7h3u1w8m" path="res://Gameplay/GameplaySession.cs" id="7_5vw27"]
 [ext_resource type="Script" uid="uid://b6bn264g1kbuf" path="res://Gameplay/Nodes/PlayerNode.cs" id="9_4c57u"]
 [ext_resource type="PackedScene" uid="uid://cbk7rcuv37u3c" path="res://Scenes/Player.tscn" id="9_kek77"]
@@ -49,11 +50,15 @@ shader_parameter/wave_scale = 0.08
 shader_parameter/roughness_val = 0.25
 shader_parameter/specular_val = 0.5
 
-[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_efxa6"]
-albedo_color = Color(0.77500683, 0.6220839, 0.2298606, 1)
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_efxa6"]
+render_priority = 0
+shader = ExtResource("6_dg77c")
+shader_parameter/bark_color = Color(1, 1, 1, 1)
+shader_parameter/bark_tile_world_size = 1.25
+shader_parameter/reflectivity = 0.03
 
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_dg77c"]
-albedo_color = Color(0.34078795, 0.16590363, 0.039371293, 1)
+albedo_color = Color(0.38758513, 0.52061194, 3.85046e-07, 1)
 
 [sub_resource type="Image" id="Image_ycdy4"]
 data = {
@@ -91,7 +96,7 @@ MaxMeshBuildPerFrame = 4
 MaxCollisionBuildPerFrame = 6
 TerrainMaterial = ExtResource("16_2cqfq")
 WaterMaterial = SubResource("ShaderMaterial_074og")
-TrunkMaterial = SubResource("StandardMaterial3D_efxa6")
+TrunkMaterial = SubResource("ShaderMaterial_efxa6")
 CanopyMaterial = SubResource("StandardMaterial3D_dg77c")
 
 [node name="WorldGameplay" type="Node3D" parent="." unique_id=880777964]

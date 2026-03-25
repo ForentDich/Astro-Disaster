@@ -1,0 +1,20 @@
+{
+  "oak": {
+    "trunk_texture": "res://Terrain/Textures/trees/oak_bark.png",
+    "trunk_color": "#FFDFC4",
+    "bark_tile_world_size": 2.25,
+    "canopy_color": "#2D7A2D"
+  },
+  "birch": {
+    "trunk_texture": "res://Terrain/Textures/trees/birch_bark.png",
+    "trunk_color": "#E8DDD0",
+    "bark_tile_world_size": 1.0,
+    "canopy_color": "#5A7A5A"
+  },
+  "spruce": {
+    "trunk_texture": "res://Terrain/Textures/trees/spruce_bark.png",
+    "trunk_color": "#424242",
+    "bark_tile_world_size": 1.4,
+    "canopy_color": "#1F4620"
+  }
+}

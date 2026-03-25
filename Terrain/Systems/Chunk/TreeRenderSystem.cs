@@ -6,12 +6,11 @@ using System.Collections.Generic;
 /// <summary>
 /// Creates MultiMeshInstance3D nodes for chunks that have ChunkTrees but no ChunkTreeMesh.
 /// Groups trees by (type, variation) for batched rendering.
+/// Uses TreeTypeRegistry for per-type materials (texture + color tint).
 /// </summary>
 public class TreeRenderSystem : QuerySystem<ChunkInfo, ChunkTrees>
 {
-	public Material TrunkMaterial  { get; set; }
-	public Material CanopyMaterial { get; set; }
-	public Node3D   TreeRoot       { get; set; }
+	public Node3D TreeRoot { get; set; }
 
 	public TreeRenderSystem() => Filter
 		.WithoutAllTags(Tags.Get<PendingRemoval>());
@@ -64,6 +63,10 @@ public class TreeRenderSystem : QuerySystem<ChunkInfo, ChunkTrees>
 		foreach (var ((type, variation), instances) in groups)
 		{
 			var template = TreeTemplateGenerator.Get(type, variation);
+			
+			// Get per-type materials from registry
+			var trunkMatPerType = TreeTypeRegistry.GetTrunkMaterial(type);
+			var canopyMatPerType = TreeTypeRegistry.GetCanopyMaterial(type);
 
 			// ── Trunk MultiMesh ──
 			var trunkMM = new MultiMesh
@@ -105,8 +108,8 @@ public class TreeRenderSystem : QuerySystem<ChunkInfo, ChunkTrees>
 				Multimesh = trunkMM,
 				CastShadow = GeometryInstance3D.ShadowCastingSetting.On
 			};
-			if (TrunkMaterial != null)
-				trunkNode.MaterialOverride = TrunkMaterial;
+			if (trunkMatPerType != null)
+				trunkNode.MaterialOverride = trunkMatPerType;
 			TreeRoot.AddChild(trunkNode);
 			instanceIds.Add(trunkNode.GetInstanceId());
 
@@ -116,8 +119,8 @@ public class TreeRenderSystem : QuerySystem<ChunkInfo, ChunkTrees>
 				Multimesh = canopyMM,
 				CastShadow = GeometryInstance3D.ShadowCastingSetting.On
 			};
-			if (CanopyMaterial != null)
-				canopyNode.MaterialOverride = CanopyMaterial;
+			if (canopyMatPerType != null)
+				canopyNode.MaterialOverride = canopyMatPerType;
 			TreeRoot.AddChild(canopyNode);
 			instanceIds.Add(canopyNode.GetInstanceId());
 		}
