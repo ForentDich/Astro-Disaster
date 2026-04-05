@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using Godot;
 
@@ -371,13 +372,45 @@ public class NoiseGenerator
                 int   heightValue = Mathf.RoundToInt(noiseValue * heightScale * maxHeight);
 
                 int idx = z * width + x;
-                output[idx] = Mathf.Clamp(heightValue, 0, maxHeight);
+                output[idx] = heightValue; // Убрали скалярный Clamp для SIMD-прохода
+                
                 if (writeZone)    zoneOutput[idx]    = (byte)GetZoneWithRiver(C, E, worldX, worldZ);
                 if (writeErosion) erosionOutput[idx] = (byte)(Mathf.Clamp(E, 0f, 1f) * 255f);
             }
         }
 
+        // 1. Аппаратный SIMD-проход для Clamp базовой высоты
+        SIMDClamp(output, 0, maxHeight);
+
+        // 2. Градиентный Clamp (с частичным разворачиванием)
         ClampGradient(output, width, height, MAX_GRADIENT);
+    }
+
+    /// <summary>
+    /// Аппаратно-ускоренный зажим массива (обрабатывает 4 или 8 интов за инструкцию)
+    /// </summary>
+    private static void SIMDClamp(Span<int> map, int min, int max)
+    {
+        int vectorSize = Vector<int>.Count;
+        int i = 0;
+
+        var minVec = new Vector<int>(min);
+        var maxVec = new Vector<int>(max);
+
+        // Векторизованный проход
+        for (; i <= map.Length - vectorSize; i += vectorSize)
+        {
+            var vec = new Vector<int>(map.Slice(i, vectorSize));
+            vec = Vector.Max(minVec, vec);
+            vec = Vector.Min(maxVec, vec);
+            vec.CopyTo(map.Slice(i, vectorSize));
+        }
+
+        // Хвост
+        for (; i < map.Length; i++)
+        {
+            map[i] = Math.Clamp(map[i], min, max);
+        }
     }
 
     /// <summary>
@@ -387,7 +420,6 @@ public class NoiseGenerator
     private static void ClampGradient(Span<int> map, int w, int h, int maxDelta)
     {
         int stride = w;
-
         bool changed = true;
         int maxPasses = 20;
 
@@ -398,9 +430,12 @@ public class NoiseGenerator
             // Forward pass: left→right, top→bottom
             for (int z = 0; z < h; z++)
             {
+                int zStride = z * stride;
+                
+                // Горизонтальный проход (зависимый, нельзя векторизовать/разворачивать безопасно)
                 for (int x = 0; x < w; x++)
                 {
-                    int idx = z * stride + x;
+                    int idx = zStride + x;
                     int val = map[idx];
 
                     if (x + 1 < w)
@@ -409,9 +444,27 @@ public class NoiseGenerator
                         if (map[ri] > val + maxDelta) { map[ri] = val + maxDelta; changed = true; }
                         else if (map[ri] < val - maxDelta) { map[ri] = val - maxDelta; changed = true; }
                     }
+                }
 
-                    if (z + 1 < h)
+                // Вертикальный проход (независимый по X, разворачиваем цикл на 4)
+                if (z + 1 < h)
+                {
+                    int x = 0;
+                    for (; x <= w - 4; x += 4)
                     {
+                        for (int i = 0; i < 4; i++)
+                        {
+                            int idx = zStride + (x + i);
+                            int bi = idx + stride;
+                            int val = map[idx];
+                            if (map[bi] > val + maxDelta) { map[bi] = val + maxDelta; changed = true; }
+                            else if (map[bi] < val - maxDelta) { map[bi] = val - maxDelta; changed = true; }
+                        }
+                    }
+                    for (; x < w; x++)
+                    {
+                        int idx = zStride + x;
+                        int val = map[idx];
                         int bi = idx + stride;
                         if (map[bi] > val + maxDelta) { map[bi] = val + maxDelta; changed = true; }
                         else if (map[bi] < val - maxDelta) { map[bi] = val - maxDelta; changed = true; }
@@ -422,9 +475,11 @@ public class NoiseGenerator
             // Backward pass: right→left, bottom→top
             for (int z = h - 1; z >= 0; z--)
             {
+                int zStride = z * stride;
+                
                 for (int x = w - 1; x >= 0; x--)
                 {
-                    int idx = z * stride + x;
+                    int idx = zStride + x;
                     int val = map[idx];
 
                     if (x > 0)
@@ -433,9 +488,26 @@ public class NoiseGenerator
                         if (map[li] > val + maxDelta) { map[li] = val + maxDelta; changed = true; }
                         else if (map[li] < val - maxDelta) { map[li] = val - maxDelta; changed = true; }
                     }
+                }
 
-                    if (z > 0)
+                if (z > 0)
+                {
+                    int x = w - 1;
+                    for (; x >= 3; x -= 4)
                     {
+                        for (int i = 0; i < 4; i++)
+                        {
+                            int idx = zStride + (x - i);
+                            int ti = idx - stride;
+                            int val = map[idx];
+                            if (map[ti] > val + maxDelta) { map[ti] = val + maxDelta; changed = true; }
+                            else if (map[ti] < val - maxDelta) { map[ti] = val - maxDelta; changed = true; }
+                        }
+                    }
+                    for (; x >= 0; x--)
+                    {
+                        int idx = zStride + x;
+                        int val = map[idx];
                         int ti = idx - stride;
                         if (map[ti] > val + maxDelta) { map[ti] = val + maxDelta; changed = true; }
                         else if (map[ti] < val - maxDelta) { map[ti] = val - maxDelta; changed = true; }

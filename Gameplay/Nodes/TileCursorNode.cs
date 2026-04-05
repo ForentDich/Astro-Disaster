@@ -36,11 +36,10 @@ public partial class TileCursorNode : Node3D
 		
 		var meshInstance = new MeshInstance3D();
 
-		float ts = ChunkConstants.TILE_SIZE;
-		float th = ChunkConstants.TILE_HEIGHT;
-		float pad = 0.06f;
+		// Делаем маленький кубик для индикации угла/вершины
+		float miniCubeSize = 0.2f;
 
-		meshInstance.Mesh = BuildEdgeMesh(ts + pad, th + pad, ts + pad);
+		meshInstance.Mesh = BuildEdgeMesh(miniCubeSize, miniCubeSize, miniCubeSize);
 
 		var mat = new StandardMaterial3D();
 		mat.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;

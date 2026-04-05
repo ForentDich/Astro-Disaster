@@ -38,11 +38,15 @@ public partial class GameSession : Node
 	[Export] public string WorldName { get; set; } = "MyWorld";
 	[Export] public int WorldSeed { get; set; } = 12345;
 
+	public static GameSession Instance { get; private set; } // Добавили Синглтон
+	public EntityStore Store => _store; // Открыли доступ к Store
+
 	private EntityStore _store;
 	private SystemRoot _systems;
 
 	// ── System references (for regeneration) ──
 	private ChunkMeshBuildSystem _meshBuildSystem;
+	private ChunkCollisionBuildSystem _collisionBuildSystem; // Вынесли в поле класса
 	private SystemSegmentCreator _segmentCreator;
 	private SegmentDataGenerationSystem _segmentDataGen;
 	private ChunkDataGenerationSystem _chunkDataGen;
@@ -50,6 +54,8 @@ public partial class GameSession : Node
 	private float _smoothedFrameMs = 16.6f;
 	private float _budgetTimer;
 	private int _meshBudget;
+	private int _dataGenBudget; // Добавили бюджет данных
+	private int _collisionBudget; // Добавили бюджет коллизий
 
 	// ── Debug overlay ──
 	private Label _biomeLabel;
@@ -101,6 +107,8 @@ public partial class GameSession : Node
 
 	public override void _Ready()
 	{
+		Instance = this; // Инициализация синглтона
+
 		SetupNoiseSettings();
 		SetupTerrain();
 
@@ -170,12 +178,14 @@ public partial class GameSession : Node
 			ParentNode = this
 		};
 
-		var collisionBuildSystem = new ChunkCollisionBuildSystem
+		_collisionBuildSystem = new ChunkCollisionBuildSystem
 		{
 			Viewer = Viewer,
 			MaxPerFrame = MaxCollisionBuildPerFrame,
 			ParentNode = this
 		};
+
+		var terrainEditorSystem = new TerrainEditorSystem(); // Подключаем редактор
 
 		// ── Trees ──
 		var treeRoot = new Node3D { Name = "Trees" };
@@ -194,6 +204,8 @@ public partial class GameSession : Node
 		};
 
 		_meshBudget = Mathf.Max(1, MaxMeshBuildPerFrame);
+		_dataGenBudget = Mathf.Max(1, MaxDataGenPerFrame);
+		_collisionBudget = Mathf.Max(1, MaxCollisionBuildPerFrame);
 
 		_systems = new SystemRoot(_store)
 		{
@@ -205,10 +217,11 @@ public partial class GameSession : Node
 			removalSystem,
 			chunkLoadSystem,
 			_chunkDataGen,
+			terrainEditorSystem, // Добавили в список обновления (До MeshBuild)
 			_meshBuildSystem,
-			collisionBuildSystem,
-			treeSpawnSystem,
-			treeRenderSystem,
+			_collisionBuildSystem,
+			//treeSpawnSystem,
+			//treeRenderSystem,
 		};
 	}
 
@@ -304,32 +317,54 @@ public partial class GameSession : Node
 		_budgetTimer = 0f;
 
 		int maxMesh = Mathf.Max(1, MaxMeshBuildPerFrame);
-		int newBudget = _meshBudget;
+		int maxData = Mathf.Max(1, MaxDataGenPerFrame);
+		int maxColl = Mathf.Max(1, MaxCollisionBuildPerFrame);
 
 		if (_smoothedFrameMs > 22f)
-			newBudget = Math.Max(1, _meshBudget - 1);
-		else if (_smoothedFrameMs < 14f)
-			newBudget = Math.Min(maxMesh, _meshBudget + 1);
-
-		if (newBudget != _meshBudget)
 		{
-			_meshBudget = newBudget;
-			_meshBuildSystem.MaxPerFrame = _meshBudget;
+			_meshBudget = Math.Max(1, _meshBudget - 1);
+			_dataGenBudget = Math.Max(1, _dataGenBudget - 1);
+			_collisionBudget = Math.Max(1, _collisionBudget - 1);
 		}
+		else if (_smoothedFrameMs < 14f)
+		{
+			_meshBudget = Math.Min(maxMesh, _meshBudget + 1);
+			_dataGenBudget = Math.Min(maxData, _dataGenBudget + 1);
+			_collisionBudget = Math.Min(maxColl, _collisionBudget + 1);
+		}
+
+		_meshBuildSystem.MaxPerFrame = _meshBudget;
+		_chunkDataGen.MaxPerFrame = _dataGenBudget;
+		if (_collisionBuildSystem != null)
+			_collisionBuildSystem.MaxPerFrame = _collisionBudget;
 	}
 
 	public override void _ExitTree()
 	{
+		if (Instance == this) Instance = null; // Очистка синглтона
+
+		if (_store == null) return;
+
 		foreach (var entity in _store.Entities)
 		{
 			if (entity.TryGetComponent<ChunkMesh>(out var mesh))
+			{
 				mesh.GetMesh()?.QueueFree();
+				entity.RemoveComponent<ChunkMesh>(); // Безопасное удаление компонента
+			}
 			if (entity.TryGetComponent<ChunkCollider>(out var collider))
+			{
 				collider.GetBody()?.QueueFree();
+				entity.RemoveComponent<ChunkCollider>();
+			}
 			if (entity.TryGetComponent<ChunkTreeMesh>(out var treeMesh) && treeMesh.InstanceIds != null)
 			{
 				foreach (ulong id in treeMesh.InstanceIds)
-					(GodotObject.InstanceFromId(id) as Node)?.QueueFree();
+				{
+					if (GodotObject.InstanceFromId(id) is Node node)
+						node.QueueFree();
+				}
+				entity.RemoveComponent<ChunkTreeMesh>();
 			}
 		}
 	}

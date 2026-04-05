@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 /// <summary>
@@ -20,7 +21,7 @@ public static class WallAutoMapper
     /// If a neighbor span is empty, boundary walls on that edge are skipped.
     /// </summary>
     public static void GenerateWalls(
-        SurfaceTool st,
+        List<Vector3> vertices, List<Vector3> normals, List<Vector2> uvs, List<Vector2> uv2s, List<Color> colors, List<int> indices,
         ReadOnlySpan<byte> data,
         int size,
         ReadOnlySpan<byte> rightNeighbor,
@@ -51,7 +52,7 @@ public static class WallAutoMapper
                     byte surfB = (byte)(data[ni + 2] & ChunkConstants.SURFACE_MASK);
                     float[] nh = TileMeshes.GetHeights((TileType)data[ni + 1]);
 
-                    EmitWallEdge(st,
+                    EmitWallEdge(vertices, normals, uvs, uv2s, colors, indices,
                         wx + S, wz, wz + S,
                         cNE, (nb + nh[0]) * H,
                         cSE, (nb + nh[3]) * H,
@@ -64,7 +65,7 @@ public static class WallAutoMapper
                     byte surfB = (byte)(rightNeighbor[ni + 2] & ChunkConstants.SURFACE_MASK);
                     float[] nh = TileMeshes.GetHeights((TileType)rightNeighbor[ni + 1]);
 
-                    EmitWallEdge(st,
+                    EmitWallEdge(vertices, normals, uvs, uv2s, colors, indices,
                         wx + S, wz, wz + S,
                         cNE, (nb + nh[0]) * H,
                         cSE, (nb + nh[3]) * H,
@@ -79,7 +80,7 @@ public static class WallAutoMapper
                     byte surfB = (byte)(data[ni + 2] & ChunkConstants.SURFACE_MASK);
                     float[] nh = TileMeshes.GetHeights((TileType)data[ni + 1]);
 
-                    EmitWallEdge(st,
+                    EmitWallEdge(vertices, normals, uvs, uv2s, colors, indices,
                         wz + S, wx, wx + S,
                         cSW, (nb + nh[0]) * H,
                         cSE, (nb + nh[1]) * H,
@@ -93,7 +94,7 @@ public static class WallAutoMapper
                     byte surfB = (byte)(bottomNeighbor[ni + 2] & ChunkConstants.SURFACE_MASK);
                     float[] nh = TileMeshes.GetHeights((TileType)bottomNeighbor[ni + 1]);
 
-                    EmitWallEdge(st,
+                    EmitWallEdge(vertices, normals, uvs, uv2s, colors, indices,
                         wz + S, wx, wx + S,
                         cSW, (nb + nh[0]) * H,
                         cSE, (nb + nh[1]) * H,
@@ -106,7 +107,7 @@ public static class WallAutoMapper
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void EmitWallEdge(
-        SurfaceTool st,
+        List<Vector3> verts, List<Vector3> norms, List<Vector2> uvs, List<Vector2> uv2s, List<Color> colors, List<int> indices,
         float fixedCoord, float vary0, float vary1,
         float hA0, float hB0,
         float hA1, float hB1,
@@ -156,14 +157,14 @@ public static class WallAutoMapper
         if (aHigher)
         {
             n = ComputeNormal(tl, bl, br);
-            EmitTri(st, tl, bl, br, n, uvTL, uvBL, uvBR, surf);
-            EmitTri(st, tl, br, tr, n, uvTL, uvBR, uvTR, surf);
+            EmitTri(verts, norms, uvs, uv2s, colors, indices, tl, bl, br, n, uvTL, uvBL, uvBR, surf);
+            EmitTri(verts, norms, uvs, uv2s, colors, indices, tl, br, tr, n, uvTL, uvBR, uvTR, surf);
         }
         else
         {
             n = ComputeNormal(tl, tr, br);
-            EmitTri(st, tl, tr, br, n, uvTL, uvTR, uvBR, surf);
-            EmitTri(st, tl, br, bl, n, uvTL, uvBR, uvBL, surf);
+            EmitTri(verts, norms, uvs, uv2s, colors, indices, tl, tr, br, n, uvTL, uvTR, uvBR, surf);
+            EmitTri(verts, norms, uvs, uv2s, colors, indices, tl, br, bl, n, uvTL, uvBR, uvBL, surf);
         }
     }
 
@@ -192,7 +193,7 @@ public static class WallAutoMapper
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void EmitTri(
-        SurfaceTool st,
+        List<Vector3> verts, List<Vector3> norms, List<Vector2> uvs, List<Vector2> uv2s, List<Color> colors, List<int> indices,
         Vector3 a, Vector3 b, Vector3 c, Vector3 normal,
         Vector2 uvA, Vector2 uvB, Vector2 uvC,
         Vector2 uv2)
@@ -201,20 +202,30 @@ public static class WallAutoMapper
         float nf = uv2.X / 255f;
         Color noBlend = new Color(nf, nf, nf, nf);
 
-        st.SetNormal(normal);
-        st.SetUV(uvA);
-        st.SetUV2(uv2);
-        st.SetColor(noBlend);
-        st.AddVertex(a);
+        int startIndex = verts.Count;
 
-        st.SetNormal(normal);
-        st.SetUV(uvB);
-        st.SetUV2(uv2);
-        st.AddVertex(b);
+        verts.Add(a);
+        verts.Add(b);
+        verts.Add(c);
 
-        st.SetNormal(normal);
-        st.SetUV(uvC);
-        st.SetUV2(uv2);
-        st.AddVertex(c);
+        norms.Add(normal);
+        norms.Add(normal);
+        norms.Add(normal);
+
+        uvs.Add(uvA);
+        uvs.Add(uvB);
+        uvs.Add(uvC);
+
+        uv2s.Add(uv2);
+        uv2s.Add(uv2);
+        uv2s.Add(uv2);
+
+        colors.Add(noBlend);
+        colors.Add(noBlend);
+        colors.Add(noBlend);
+
+        indices.Add(startIndex);
+        indices.Add(startIndex + 1);
+        indices.Add(startIndex + 2);
     }
 }

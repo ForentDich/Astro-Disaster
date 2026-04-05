@@ -285,7 +285,42 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				? new ReadOnlySpan<byte>(bottomNeighborData)
 				: ReadOnlySpan<byte>.Empty;
 
-			WallAutoMapper.GenerateWalls(surfaceTool, dataSpan, size, rightSpan, bottomSpan);
+			// Создаем списки для стен
+			List<Vector3> wallVerts = new List<Vector3>(1024);
+			List<Vector3> wallNorms = new List<Vector3>(1024);
+			List<Vector2> wallUVs = new List<Vector2>(1024);
+			List<Vector2> wallUV2s = new List<Vector2>(1024);
+			List<Color> wallColors = new List<Color>(1024);
+			List<int> wallIndices = new List<int>(1024);
+
+			WallAutoMapper.GenerateWalls(wallVerts, wallNorms, wallUVs, wallUV2s, wallColors, wallIndices, dataSpan, size, rightSpan, bottomSpan);
+
+			// Добавляем сгенерированные стены в SurfaceTool (индексы используем по-порядку, 
+			// так как GenerateWalls создает раздельную геометрию для каждого треугольника)
+			for (int i = 0; i < wallIndices.Count; i += 3)
+			{
+				int i0 = wallIndices[i];
+				int i1 = wallIndices[i + 1];
+				int i2 = wallIndices[i + 2];
+
+				surfaceTool.SetNormal(wallNorms[i0]);
+				surfaceTool.SetUV(wallUVs[i0]);
+				surfaceTool.SetUV2(wallUV2s[i0]);
+				surfaceTool.SetColor(wallColors[i0]);
+				surfaceTool.AddVertex(wallVerts[i0]);
+
+				surfaceTool.SetNormal(wallNorms[i1]);
+				surfaceTool.SetUV(wallUVs[i1]);
+				surfaceTool.SetUV2(wallUV2s[i1]);
+				surfaceTool.SetColor(wallColors[i1]);
+				surfaceTool.AddVertex(wallVerts[i1]);
+
+				surfaceTool.SetNormal(wallNorms[i2]);
+				surfaceTool.SetUV(wallUVs[i2]);
+				surfaceTool.SetUV2(wallUV2s[i2]);
+				surfaceTool.SetColor(wallColors[i2]);
+				surfaceTool.AddVertex(wallVerts[i2]);
+			}
 
 			ArrayMesh arrayMesh = surfaceTool.Commit();
 			if (TerrainMaterial != null)

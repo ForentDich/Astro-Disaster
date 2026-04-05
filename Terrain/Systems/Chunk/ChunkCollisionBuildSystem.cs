@@ -17,6 +17,9 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 	private int _selectedCount;
 
 	private ArchetypeQuery<ChunkInfo, ChunkCollider> _removalQuery;
+	private ArchetypeQuery<ChunkInfo, ChunkTerrain> _allTerrainQuery;
+	private readonly Dictionary<(int, int), int> _chunkLookup = new();
+
 	public ChunkCollisionBuildSystem() => Filter.AllTags(Tags.Get<NeedsCollision, ChunkComplete>());
 
 	protected override void OnAddStore(EntityStore store)
@@ -26,6 +29,8 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 
 		_removalQuery = store.Query<ChunkInfo, ChunkCollider>()
 			.WithoutAnyTags(Tags.Get<NeedsCollision>());
+		
+		_allTerrainQuery = store.Query<ChunkInfo, ChunkTerrain>();
 	}
 
 	protected override void OnUpdate()
@@ -33,7 +38,6 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		var buffer = CommandBuffer;
 
 		RemoveOutOfRangeCollisions(buffer);
-
 
 		if (MaxPerFrame > 0 && ParentNode != null)
 			BuildNewCollisions(buffer);
@@ -53,9 +57,28 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		}
 	}
 
+	private byte[] GetNeighborData(int cx, int cz)
+	{
+		if (_chunkLookup.TryGetValue((cx, cz), out int nId) &&
+			_store.TryGetEntityById(nId, out var nEnt) && !nEnt.IsNull &&
+			nEnt.TryGetComponent<ChunkTerrain>(out var nTerrain))
+		{
+			return nTerrain.Data;
+		}
+		return null;
+	}
+
 	private void BuildNewCollisions(CommandBuffer buffer)
 	{
 		if (Viewer == null) return;
+
+		// Build coordinate → entityId lookup for neighbor queries
+		_chunkLookup.Clear();
+		foreach (var e in _allTerrainQuery.Entities)
+		{
+			ref var ci = ref e.GetComponent<ChunkInfo>();
+			_chunkLookup[(ci.X, ci.Z)] = e.Id;
+		}
 
 		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_WORLD_SIZE);
 
@@ -92,7 +115,10 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				ref var info = ref entity.GetComponent<ChunkInfo>();
 				ref var terrain = ref entity.GetComponent<ChunkTerrain>();
 
-				var body = BuildTileCollisionBody(terrain.Data, info);
+				byte[] rightData = GetNeighborData(info.X + 1, info.Z);
+				byte[] bottomData = GetNeighborData(info.X, info.Z + 1);
+
+				var body = BuildTileCollisionBody(terrain.Data, rightData, bottomData, info);
 				
 				if (body != null)
 				{
@@ -107,7 +133,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		}
 	}
 
-	private StaticBody3D BuildTileCollisionBody(byte[] terrainData, ChunkInfo info)
+	private StaticBody3D BuildTileCollisionBody(byte[] terrainData, byte[] rightNeighborData, byte[] bottomNeighborData, ChunkInfo info)
 	{
 		if (ParentNode == null) 
 		{
@@ -138,6 +164,23 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 					triangles.Add(tileVertices[v] + tileOffset);
 				}
 			}
+		}
+
+		ReadOnlySpan<byte> rightSpan = rightNeighborData != null ? new ReadOnlySpan<byte>(rightNeighborData) : ReadOnlySpan<byte>.Empty;
+		ReadOnlySpan<byte> bottomSpan = bottomNeighborData != null ? new ReadOnlySpan<byte>(bottomNeighborData) : ReadOnlySpan<byte>.Empty;
+
+		var wallVerts = new List<Vector3>(512);
+		var wallNorms = new List<Vector3>(); 
+		var wallUVs = new List<Vector2>();
+		var wallUV2s = new List<Vector2>();
+		var wallColors = new List<Color>();
+		var wallIndices = new List<int>(512);
+
+		WallAutoMapper.GenerateWalls(wallVerts, wallNorms, wallUVs, wallUV2s, wallColors, wallIndices, terrainData, size, rightSpan, bottomSpan);
+
+		for (int i = 0; i < wallIndices.Count; i++)
+		{
+			triangles.Add(wallVerts[wallIndices[i]]);
 		}
 
 		var concaveShape = new ConcavePolygonShape3D();

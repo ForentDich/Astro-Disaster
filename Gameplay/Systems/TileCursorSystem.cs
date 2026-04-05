@@ -82,27 +82,21 @@ public class TileCursorSystem : QuerySystem<TileCursor, TileCursorVisual>
             var hitPos    = (Vector3)result["position"];
             var hitNormal = (Vector3)result["normal"];
 
-            // Step slightly inside the surface to land in the correct tile
-            var insidePos = hitPos - hitNormal * 0.1f;
-
-            // Snap to tile grid
+            // Snap to nearest corner (vertex) instead of tile center
             float ts = ChunkConstants.TILE_SIZE;
             float th = ChunkConstants.TILE_HEIGHT;
 
-            int tileX = (int)MathF.Floor(insidePos.X / ts);
-            int tileZ = (int)MathF.Floor(insidePos.Z / ts);
-            int tileY = (int)MathF.Floor(insidePos.Y / th);
+            int pointX = (int)MathF.Round(hitPos.X / ts);
+            int pointY = (int)MathF.Round(hitPos.Y / th);
+            int pointZ = (int)MathF.Round(hitPos.Z / ts);
 
-            // Tile center in world space
-            // Tile mesh goes from (tileX*ts, tileY*th, tileZ*ts)
-            // to ((tileX+1)*ts, (tileY+1)*th, (tileZ+1)*ts)
-            float centerX = tileX * ts + ts * 0.5f;
-            float centerY = tileY * th + th * 0.5f;
-            float centerZ = tileZ * ts + ts * 0.5f;
+            float cornerX = pointX * ts;
+            float cornerY = pointY * th;
+            float cornerZ = pointZ * ts;
 
             // Check horizontal distance from player
-            float dx = centerX - playerPos.X;
-            float dz = centerZ - playerPos.Z;
+            float dx = cornerX - playerPos.X;
+            float dz = cornerZ - playerPos.Z;
             if (cursor.MaxReach > 0f && (dx * dx + dz * dz) > cursor.MaxReach * cursor.MaxReach)
             {
                 cursor.IsActive = false;
@@ -111,14 +105,24 @@ public class TileCursorSystem : QuerySystem<TileCursor, TileCursorVisual>
             }
 
             cursor.IsActive      = true;
-            cursor.TileCoord     = new Vector3I(tileX, tileY, tileZ);
-            cursor.WorldPosition = new Vector3(centerX, centerY, centerZ);
+            cursor.TileCoord     = new Vector3I(pointX, pointY, pointZ);
+            cursor.WorldPosition = new Vector3(cornerX, cornerY, cornerZ);
             cursor.HitNormal     = hitNormal;
 
             if (visual != null)
             {
                 visual.GlobalPosition = cursor.WorldPosition;
                 visual.Visible = true;
+            }
+
+            // Обработка кликов для редактирования!
+            if (Input.IsActionJustPressed("edit_raise")) // ЛКМ
+            {
+                TerrainEditorSystem.RequestEdit(pointX, pointY, pointZ, 1);
+            }
+            else if (Input.IsActionJustPressed("edit_lower")) // ПКМ
+            {
+                TerrainEditorSystem.RequestEdit(pointX, pointY, pointZ, -1);
             }
         }
     }

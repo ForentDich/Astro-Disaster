@@ -1,4 +1,3 @@
-
 using Godot;
 using System;
 using System.Runtime.CompilerServices;
@@ -40,7 +39,7 @@ public static class TileAutoMapper
     /// though its actual geometry won't span the full height difference.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static (TileType type, int baseHeight) Classify(int nw, int ne, int se, int sw)
+    public static (TileType type, int baseHeight) Classify(int nw, int ne, int se, int sw)
     {
         int baseHeight = nw;
         if (ne < baseHeight) baseHeight = ne;
