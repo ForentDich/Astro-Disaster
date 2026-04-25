@@ -1,16 +1,12 @@
-[gd_resource type="ShaderMaterial" format=3 uid="uid://bcx41bquwlack"]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://clr6ha0aoqo5i"]
 
-[ext_resource type="Shader" uid="uid://kqhgc13qi63i" path="res://Terrain/Shaders/terrain_tiles.gdshader" id="1_078fw"]
+[ext_resource type="Shader" uid="uid://bxtvxeevn1jy4" path="res://Terrain/Shaders/terrain_tiles.gdshader" id="1"]
 
 [resource]
 render_priority = 0
-shader = ExtResource("1_078fw")
-shader_parameter/surface_count = 5
+shader = ExtResource("1")
+shader_parameter/surface_count = 1
 shader_parameter/tile_world_size = 3.0
-shader_parameter/tint_variation = 0.5
-shader_parameter/tint_scale = 4.000000142499999
-shader_parameter/roughness_base = 1.0
-shader_parameter/blend_width = 0.48000002117006
-shader_parameter/border_noise_freq = 0.550000002375
-shader_parameter/border_pixel_size = 0.20000000624012
-shader_parameter/border_amplitude = 2.0
+shader_parameter/tint_variation = 0.0710000033725
+shader_parameter/tint_noise_scale = 3.000000095
+shader_parameter/roughness_base = 0.970000046075

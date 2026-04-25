@@ -1,107 +1,150 @@
 using Godot;
 using System;
+using System.IO;
 
 /// <summary>
-/// Builds terrain rendering data from SurfaceRegistry and applies to ShaderMaterial:
-///   - Texture2DArray from surface textures (fallback = solid white)
-///   - Tint LUT texture (Nx1, each pixel = surface tint color)
-///   - surface_count uniform
+/// Creates shader lookup textures from SurfaceRegistry and applies them to the terrain shader.
+/// Supports default textures from res:// and optional resource-pack textures from user://.
 /// </summary>
 public static class TerrainTextureLoader
 {
-    /// <summary>
-    /// Reads SurfaceRegistry (must be loaded first), builds all lookup textures,
-    /// assigns to ShaderMaterial. Call once at startup from GameSession.
-    /// </summary>
+    private const int FALLBACK_SIZE = 32;
+
     public static void Apply(ShaderMaterial material)
     {
-        if (material == null) return;
+        if (material == null)
+            return;
 
         var surfaces = SurfaceRegistry.Surfaces;
         int count = surfaces.Length;
         if (count == 0)
         {
-            GD.PrintErr("[TerrainTextures] No surfaces in SurfaceRegistry!");
+            GD.PrintErr("[TerrainTextureLoader] SurfaceRegistry is empty.");
             return;
         }
 
-        BuildTextureArray(surfaces, count, material);
-        BuildTintLut(surfaces, count, material);
-        material.SetShaderParameter("surface_count", count);
-
-        GD.Print($"[TerrainTextures] Applied {count} surfaces to material");
-    }
-
-    private static void BuildTextureArray(SurfaceRegistry.SurfaceEntry[] surfaces, int count, ShaderMaterial material)
-    {
-        int w = 32, h = 32;
-        bool sizeFound = false;
-        var images = new Image[count];
+        Image[] images = new Image[count];
+        int width = 0;
+        int height = 0;
 
         for (int i = 0; i < count; i++)
         {
-            string path = surfaces[i].TexturePath;
-            if (path != null && ResourceLoader.Exists(path))
+            Image image = TryLoadImage(surfaces[i].TexturePath);
+            if (image == null)
+                continue;
+
+            if (image.IsCompressed())
+                image.Decompress();
+
+            if (image.GetFormat() != Image.Format.Rgba8)
+                image.Convert(Image.Format.Rgba8);
+
+            images[i] = image;
+
+            if (width == 0 || height == 0)
             {
-                var tex = GD.Load<Texture2D>(path);
-                images[i] = tex.GetImage();
-                images[i].Decompress();
-                if (!sizeFound)
-                {
-                    w = images[i].GetWidth();
-                    h = images[i].GetHeight();
-                    sizeFound = true;
-                }
-                GD.Print($"[TerrainTextures] Layer {i}: {surfaces[i].Name} ({path})");
+                width = image.GetWidth();
+                height = image.GetHeight();
             }
-            else
-            {
-                images[i] = null;
-                GD.Print($"[TerrainTextures] Layer {i}: {surfaces[i].Name} (tint only)");
-            }
+        }
+
+        if (width <= 0 || height <= 0)
+        {
+            width = FALLBACK_SIZE;
+            height = FALLBACK_SIZE;
         }
 
         for (int i = 0; i < count; i++)
         {
-            if (images[i] != null)
+            if (images[i] == null)
             {
-                if (images[i].GetWidth() != w || images[i].GetHeight() != h)
-                    images[i].Resize(w, h, Image.Interpolation.Nearest);
+                images[i] = Image.CreateEmpty(width, height, false, Image.Format.Rgba8);
+                images[i].Fill(Colors.White);
+            }
+            else
+            {
+                if (images[i].GetWidth() != width || images[i].GetHeight() != height)
+                    images[i].Resize(width, height, Image.Interpolation.Nearest);
+
                 if (images[i].GetFormat() != Image.Format.Rgba8)
                     images[i].Convert(Image.Format.Rgba8);
             }
-            else
-            {
-                var fallback = Image.CreateEmpty(w, h, false, Image.Format.Rgba8);
-                fallback.Fill(Colors.White);
-                images[i] = fallback;
-            }
+
             images[i].GenerateMipmaps();
         }
 
-        var texArray = new Texture2DArray();
-        var imgArray = new Godot.Collections.Array<Image>();
-        foreach (var img in images)
-            imgArray.Add(img);
-
-        var err = texArray.CreateFromImages(imgArray);
-        if (err == Error.Ok)
-            material.SetShaderParameter("terrain_textures", texArray);
-        else
-            GD.PrintErr($"[TerrainTextures] Failed to create Texture2DArray: {err}");
-    }
-
-    private static void BuildTintLut(SurfaceRegistry.SurfaceEntry[] surfaces, int count, ShaderMaterial material)
-    {
-        var img = Image.CreateEmpty(count, 1, false, Image.Format.Rgba8);
+        Texture2DArray textureArray = new Texture2DArray();
+        var imageArray = new Godot.Collections.Array<Image>();
         for (int i = 0; i < count; i++)
+            imageArray.Add(images[i]);
+
+        Error err = textureArray.CreateFromImages(imageArray);
+        if (err != Error.Ok)
         {
-            var c = surfaces[i].Tint;
-            // Alpha channel = noiseStrength (0..1)
-            img.SetPixel(i, 0, new Color(c.R, c.G, c.B, surfaces[i].NoiseStrength));
+            GD.PrintErr($"[TerrainTextureLoader] Failed to build texture array: {err}");
+            return;
         }
 
-        material.SetShaderParameter("tint_lut", ImageTexture.CreateFromImage(img));
+        material.SetShaderParameter("terrain_textures", textureArray);
+        material.SetShaderParameter("tint_lut", BuildTintLut(surfaces));
+        material.SetShaderParameter("surface_count", count);
+
+        GD.Print($"[TerrainTextureLoader] Applied {count} terrain surfaces");
     }
 
+    private static Texture2D BuildTintLut(SurfaceRegistry.SurfaceEntry[] surfaces)
+    {
+        int count = surfaces.Length;
+        Image lutImage = Image.CreateEmpty(count, 1, false, Image.Format.Rgba8);
+
+        for (int i = 0; i < count; i++)
+        {
+            Color tint = surfaces[i].Tint;
+            float noiseStrength = Mathf.Clamp(surfaces[i].NoiseStrength, 0f, 1f);
+            lutImage.SetPixel(i, 0, new Color(tint.R, tint.G, tint.B, noiseStrength));
+        }
+
+        return ImageTexture.CreateFromImage(lutImage);
+    }
+
+    private static Image TryLoadImage(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+
+        try
+        {
+            if (path.StartsWith("res://", StringComparison.Ordinal))
+            {
+                if (!ResourceLoader.Exists(path))
+                    return null;
+
+                Texture2D texture = GD.Load<Texture2D>(path);
+                return texture?.GetImage();
+            }
+
+            if (path.StartsWith("user://", StringComparison.Ordinal))
+            {
+                string absolute = ProjectSettings.GlobalizePath(path);
+                return LoadImageFromAbsolutePath(absolute);
+            }
+
+            if (Path.IsPathRooted(path))
+                return LoadImageFromAbsolutePath(path);
+        }
+        catch (Exception ex)
+        {
+            GD.PrintErr($"[TerrainTextureLoader] Failed to load image '{path}': {ex.Message}");
+        }
+
+        return null;
+    }
+
+    private static Image LoadImageFromAbsolutePath(string absolutePath)
+    {
+        if (string.IsNullOrWhiteSpace(absolutePath) || !File.Exists(absolutePath))
+            return null;
+
+        return Image.LoadFromFile(absolutePath);
+    }
 }

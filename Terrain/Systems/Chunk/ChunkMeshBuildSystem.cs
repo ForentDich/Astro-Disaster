@@ -2,58 +2,45 @@ using Friflo.Engine.ECS;
 using Friflo.Engine.ECS.Systems;
 using Godot;
 using System;
-using System.Buffers;
 using System.Collections.Generic;
 
+/// <summary>
+/// Builds chunk mesh from grid-cell heights without tile type mapping.
+/// </summary>
 public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 {
-	public Material TerrainMaterial { get; set; }
-	public Material WaterMaterial { get; set; }
-	/// <summary>Sea level in tile height units (baseHeight). Tiles below get water.</summary>
-	public int SeaLevelTile { get; set; }
-	public int MaxPerFrame { get; set; } = 2;
-	public Node ParentNode { get; set; }
-	public Node3D Viewer { get; set; }
+	private static StandardMaterial3D _fallbackMaterial;
 
 	private EntityStore _store;
-
-	/// <summary>All chunks that have terrain data — used for neighbor lookups.</summary>
-	private ArchetypeQuery<ChunkInfo, ChunkTerrain> _allTerrainQuery;
-	private readonly Dictionary<(int, int), int> _chunkLookup = new();
-
 	private int[] _selectedEntityIds;
 	private int[] _selectedDistances;
 	private int _selectedCount;
 
-	private readonly ArrayPool<Vector3> _vertexPool = ArrayPool<Vector3>.Shared;
-	private readonly ArrayPool<Vector3> _normalPool = ArrayPool<Vector3>.Shared;
-	private readonly ArrayPool<Color> _colorPool = ArrayPool<Color>.Shared;
+	public Material TerrainMaterial { get; set; }
+	public int MaxPerFrame { get; set; } = 2;
+	public Node ParentNode { get; set; }
+	public Node3D Viewer { get; set; }
 
-	public ChunkMeshBuildSystem() => Filter.AllTags(Tags.Get<NeedsMeshUpdate>());
+	public ChunkMeshBuildSystem()
+		=> Filter.AllTags(Tags.Get<ChunkDataReady>())
+			.WithoutAnyTags(Tags.Get<PendingRemoval>());
 
 	protected override void OnAddStore(EntityStore store)
 	{
 		base.OnAddStore(store);
 		_store = store;
-		_allTerrainQuery = store.Query<ChunkInfo, ChunkTerrain>();
 	}
 
 	protected override void OnUpdate()
 	{
-		var buffer = CommandBuffer;
-
-		if (MaxPerFrame <= 0)
+		if (ParentNode == null || MaxPerFrame <= 0)
 			return;
 
-		// Build coordinate → entityId lookup for neighbor queries
-		_chunkLookup.Clear();
-		foreach (var e in _allTerrainQuery.Entities)
-		{
-			ref var ci = ref e.GetComponent<ChunkInfo>();
-			_chunkLookup[(ci.X, ci.Z)] = e.Id;
-		}
+		var commandBuffer = CommandBuffer;
 
-		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_WORLD_SIZE);
+		(int centerX, int centerZ) = Viewer != null
+			? NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_WORLD_SIZE)
+			: (0, 0);
 
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
 		_selectedCount = 0;
@@ -62,37 +49,38 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		{
 			if (entity.Tags.Has<PendingRemoval>())
 				continue;
-				
+
 			ref var info = ref entity.GetComponent<ChunkInfo>();
-			int dist = Math.Max(Math.Abs(info.X - centerX), Math.Abs(info.Z - centerZ));
-			NearestChunkSelectionTool.TryInsertNearest(ref _selectedCount, _selectedEntityIds, _selectedDistances, entity.Id, dist, MaxPerFrame);
+			int dist = Viewer != null
+				? Math.Max(Math.Abs(info.X - centerX), Math.Abs(info.Z - centerZ))
+				: 0;
+
+			NearestChunkSelectionTool.TryInsertNearest(
+				ref _selectedCount,
+				_selectedEntityIds,
+				_selectedDistances,
+				entity.Id,
+				dist,
+				MaxPerFrame);
 		}
 
 		for (int i = 0; i < _selectedCount; i++)
 		{
 			int entityId = _selectedEntityIds[i];
-
 			if (!_store.TryGetEntityById(entityId, out var entity) || entity.IsNull)
 				continue;
 
 			if (entity.Tags.Has<PendingRemoval>())
 				continue;
 
-			bool success = false;
-			Exception error = null;
-			
 			try
 			{
 				ref var info = ref entity.GetComponent<ChunkInfo>();
 				ref var terrain = ref entity.GetComponent<ChunkTerrain>();
 
-				// Look up right / bottom neighbor data for boundary walls
-				byte[] rightData = GetNeighborData(info.X + 1, info.Z);
-				byte[] bottomData = GetNeighborData(info.X, info.Z + 1);
-				byte[] topData = GetNeighborData(info.X, info.Z - 1);
-				byte[] leftData = GetNeighborData(info.X - 1, info.Z);
-
-				Mesh mesh = BuildMeshFromData(terrain.Data, rightData, bottomData, topData, leftData);
+				Mesh mesh = BuildGridMesh(terrain.Data);
+				if (mesh == null)
+					continue;
 
 				if (entity.TryGetComponent<ChunkMesh>(out var chunkMesh))
 				{
@@ -100,299 +88,186 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 					if (existing != null)
 					{
 						existing.Mesh = mesh;
-						existing.MaterialOverride = null;
 						existing.Name = $"Chunk_{info.X}_{info.Z}";
-						existing.Position = new Vector3(info.X * ChunkConstants.CHUNK_WORLD_SIZE, 0, info.Z * ChunkConstants.CHUNK_WORLD_SIZE);
+						existing.Position = new Vector3(
+							info.X * ChunkConstants.CHUNK_WORLD_SIZE,
+							0,
+							info.Z * ChunkConstants.CHUNK_WORLD_SIZE);
 					}
 					else
 					{
-						var meshInstance = CreateMeshInstance(mesh, info);
-						buffer.AddComponent(entityId, new ChunkMesh { InstaceId = meshInstance.GetInstanceId() });
+						MeshInstance3D meshInstance = CreateMeshInstance(mesh, info);
+						commandBuffer.AddComponent(entityId, new ChunkMesh { InstaceId = meshInstance.GetInstanceId() });
 					}
 				}
 				else
 				{
-					var meshInstance = CreateMeshInstance(mesh, info);
-					buffer.AddComponent(entityId, new ChunkMesh { InstaceId = meshInstance.GetInstanceId() });
+					MeshInstance3D meshInstance = CreateMeshInstance(mesh, info);
+					commandBuffer.AddComponent(entityId, new ChunkMesh { InstaceId = meshInstance.GetInstanceId() });
 				}
 
-				success = true;
+				if (entity.TryGetComponent<ChunkCollider>(out var collider))
+				{
+					collider.GetBody()?.QueueFree();
+					commandBuffer.RemoveComponent<ChunkCollider>(entityId);
+				}
+
+				commandBuffer.RemoveTag<ChunkDataReady>(entityId);
+				commandBuffer.RemoveTag<NeedsMeshUpdate>(entityId);
+				commandBuffer.RemoveTag<ChunkError>(entityId);
+				commandBuffer.AddTag<ChunkComplete>(entityId);
 			}
 			catch (Exception ex)
 			{
-				GD.PrintErr($"[ChunkMeshBuildSystem] >> Error building mesh: {ex}");
-				error = ex;
-			}
-
-			if (success)
-			{
-				buffer.RemoveTag<ChunkDataReady>(entityId);
-				buffer.RemoveTag<NeedsMeshUpdate>(entityId);
-				buffer.AddTag<ChunkComplete>(entityId);
-			}
-			else if (error != null)
-			{
-				buffer.RemoveTag<ChunkDataReady>(entityId);
-				buffer.RemoveTag<NeedsMeshUpdate>(entityId);
-				buffer.AddTag<ChunkError>(entityId);
+				GD.PrintErr($"[ChunkMeshBuildSystem] Error building chunk mesh for {entityId}: {ex.Message}");
+				commandBuffer.RemoveTag<ChunkDataReady>(entityId);
+				commandBuffer.AddTag<ChunkError>(entityId);
 			}
 		}
 	}
 
-	private byte[] GetNeighborData(int cx, int cz)
+	private Mesh BuildGridMesh(byte[] data)
 	{
-		if (_chunkLookup.TryGetValue((cx, cz), out int nId) &&
-			_store.TryGetEntityById(nId, out var nEnt) && !nEnt.IsNull &&
-			nEnt.TryGetComponent<ChunkTerrain>(out var nTerrain))
-		{
-			return nTerrain.Data;
-		}
-		return null;
-	}
+		if (data == null || data.Length < ChunkConstants.CHUNK_DATA_SIZE)
+			return null;
 
-	/// <summary>
-	/// Returns the surface ID at tile (x, z), looking into neighbor chunk data when out of bounds.
-	/// Falls back to <paramref name="fallback"/> if no neighbor data is available.
-	/// </summary>
-	private static byte GetSurfaceIdAt(
-		ReadOnlySpan<byte> chunkData, int x, int z,
-		int size, int stride,
-		byte[] topData, byte[] rightData, byte[] bottomData, byte[] leftData,
-		byte fallback)
-	{
-		if (x >= 0 && x < size && z >= 0 && z < size)
-		{
-			int off = (z * size + x) * stride;
-			return (byte)(chunkData[off + 2] & ChunkConstants.SURFACE_MASK);
-		}
-
-		byte[] neighborData = null;
-		int nx = x, nz = z;
-
-		if (z < 0 && x >= 0 && x < size)
-		{
-			neighborData = topData;
-			nz = size + z;
-		}
-		else if (z >= size && x >= 0 && x < size)
-		{
-			neighborData = bottomData;
-			nz = z - size;
-		}
-		else if (x < 0 && z >= 0 && z < size)
-		{
-			neighborData = leftData;
-			nx = size + x;
-		}
-		else if (x >= size && z >= 0 && z < size)
-		{
-			neighborData = rightData;
-			nx = x - size;
-		}
-
-		if (neighborData != null)
-		{
-			int off = (nz * size + nx) * stride;
-			return (byte)(neighborData[off + 2] & ChunkConstants.SURFACE_MASK);
-		}
-
-		return fallback;
-	}
-
-	private Mesh BuildMeshFromData(byte[] terrainData, byte[] rightNeighborData, byte[] bottomNeighborData, byte[] topNeighborData, byte[] leftNeighborData)
-	{
-		ReadOnlySpan<byte> dataSpan = terrainData;
-		
 		int size = ChunkConstants.CHUNK_SIZE;
-		int stride = ChunkConstants.BYTES_PER_TILE;
-		int tileCount = size * size;
-		int totalVertices = tileCount * 6;
-		
-		Vector3[] verticesArray = _vertexPool.Rent(totalVertices);
-		Vector3[] normalsArray = _normalPool.Rent(totalVertices);
-		Color[] colorsArray = _colorPool.Rent(totalVertices);
-		
-		try
+		float step = ChunkConstants.TILE_SIZE;
+		float heightStep = ChunkConstants.TILE_HEIGHT;
+
+		SurfaceTool st = new SurfaceTool();
+		st.Begin(Mesh.PrimitiveType.Triangles);
+		// Disable vertex normal smoothing to keep hard low-poly facets.
+		st.SetSmoothGroup(uint.MaxValue);
+
+		for (int z = 0; z < size; z++)
 		{
-			Span<Vector3> vertices = verticesArray.AsSpan(0, totalVertices);
-			Span<Vector3> normals = normalsArray.AsSpan(0, totalVertices);
-			Span<Color> colors = colorsArray.AsSpan(0, totalVertices);
-
-			// Parallel arrays for UV/UV2 (same size as vertices)
-			Span<Vector2> uvs  = stackalloc Vector2[totalVertices];
-			Span<Vector2> uv2s = stackalloc Vector2[totalVertices];
-			
-			int vertexIndex = 0;
-			
-			for (int z = 0; z < size; z++)
+			for (int x = 0; x < size; x++)
 			{
-				for (int x = 0; x < size; x++)
-				{
-					int offset = (z * size + x) * stride;
-					int baseHeight = dataSpan[offset];
-					TileType tileType = (TileType)dataSpan[offset + 1];
-					byte surfaceId = (byte)(dataSpan[offset + 2] & ChunkConstants.SURFACE_MASK);
-					
-					ReadOnlySpan<Vector3> tileVertices = TileMeshes.GetVertices(tileType).AsSpan();
-					ReadOnlySpan<Vector3> tileNormals = TileMeshes.GetNormals(tileType).AsSpan();
-					ReadOnlySpan<Vector2> tileUVs = TileMeshes.GetUVs(tileType).AsSpan();
-					
-					int ts = ChunkConstants.TILE_SIZE;
-					float th = ChunkConstants.TILE_HEIGHT;
-					Vector3 tileOffset = new Vector3(x * ts, baseHeight * th, z * ts);
+				int hNW = GetHeight(data, x, z);
+				int hNE = GetHeight(data, x + 1, z);
+				int hSW = GetHeight(data, x, z + 1);
+				int hSE = GetHeight(data, x + 1, z + 1);
 
-					Vector2 surfaceVec = new Vector2(surfaceId, 0);
+				byte surfaceId = GetSurface(data, x, z);
+				Color color = GetSurfaceColor(surfaceId);
 
-					// Neighbor surface IDs for border blending (encoded in vertex color)
-					byte nSurf = GetSurfaceIdAt(dataSpan, x, z - 1, size, stride, topNeighborData, rightNeighborData, bottomNeighborData, leftNeighborData, surfaceId);
-					byte eSurf = GetSurfaceIdAt(dataSpan, x + 1, z, size, stride, topNeighborData, rightNeighborData, bottomNeighborData, leftNeighborData, surfaceId);
-					byte sSurf = GetSurfaceIdAt(dataSpan, x, z + 1, size, stride, topNeighborData, rightNeighborData, bottomNeighborData, leftNeighborData, surfaceId);
-					byte wSurf = GetSurfaceIdAt(dataSpan, x - 1, z, size, stride, topNeighborData, rightNeighborData, bottomNeighborData, leftNeighborData, surfaceId);
-					Color neighborColor = new Color(nSurf / 255f, eSurf / 255f, sSurf / 255f, wSurf / 255f);
-					
-					for (int v = 0; v < tileVertices.Length; v++)
-					{
-						vertices[vertexIndex + v] = tileVertices[v] + tileOffset;
-						normals[vertexIndex + v] = tileNormals[v];
-						uvs[vertexIndex + v] = tileUVs[v];
-						uv2s[vertexIndex + v] = surfaceVec;
-						colors[vertexIndex + v] = neighborColor;
-					}
-					
-					vertexIndex += tileVertices.Length;
-				}
+				Vector3 nw = new Vector3(x * step, hNW * heightStep, z * step);
+				Vector3 ne = new Vector3((x + 1) * step, hNE * heightStep, z * step);
+				Vector3 sw = new Vector3(x * step, hSW * heightStep, (z + 1) * step);
+				Vector3 se = new Vector3((x + 1) * step, hSE * heightStep, (z + 1) * step);
+				Vector2 uvNW = new Vector2(0f, 0f);
+				Vector2 uvNE = new Vector2(1f, 0f);
+				Vector2 uvSW = new Vector2(0f, 1f);
+				Vector2 uvSE = new Vector2(1f, 1f);
+
+				AddTriangle(st, nw, ne, se, uvNW, uvNE, uvSE, surfaceId, color);
+				AddTriangle(st, nw, se, sw, uvNW, uvSE, uvSW, surfaceId, color);
 			}
-			
-			// ── Surface 0: terrain ──
-			SurfaceTool surfaceTool = new SurfaceTool();
-			surfaceTool.Begin(Mesh.PrimitiveType.Triangles);
-			surfaceTool.SetSmoothGroup(uint.MaxValue);
-			
-			for (int i = 0; i < vertexIndex; i++)
-			{
-				surfaceTool.SetNormal(normals[i]);
-				surfaceTool.SetUV(uvs[i]);
-				surfaceTool.SetUV2(uv2s[i]);
-				surfaceTool.SetColor(colors[i]);
-				surfaceTool.AddVertex(vertices[i]);
-			}
-
-			// Fill vertical gaps between tiles
-			ReadOnlySpan<byte> rightSpan = rightNeighborData != null
-				? new ReadOnlySpan<byte>(rightNeighborData)
-				: ReadOnlySpan<byte>.Empty;
-			ReadOnlySpan<byte> bottomSpan = bottomNeighborData != null
-				? new ReadOnlySpan<byte>(bottomNeighborData)
-				: ReadOnlySpan<byte>.Empty;
-
-			// Создаем списки для стен
-			List<Vector3> wallVerts = new List<Vector3>(1024);
-			List<Vector3> wallNorms = new List<Vector3>(1024);
-			List<Vector2> wallUVs = new List<Vector2>(1024);
-			List<Vector2> wallUV2s = new List<Vector2>(1024);
-			List<Color> wallColors = new List<Color>(1024);
-			List<int> wallIndices = new List<int>(1024);
-
-			WallAutoMapper.GenerateWalls(wallVerts, wallNorms, wallUVs, wallUV2s, wallColors, wallIndices, dataSpan, size, rightSpan, bottomSpan);
-
-			// Добавляем сгенерированные стены в SurfaceTool (индексы используем по-порядку, 
-			// так как GenerateWalls создает раздельную геометрию для каждого треугольника)
-			for (int i = 0; i < wallIndices.Count; i += 3)
-			{
-				int i0 = wallIndices[i];
-				int i1 = wallIndices[i + 1];
-				int i2 = wallIndices[i + 2];
-
-				surfaceTool.SetNormal(wallNorms[i0]);
-				surfaceTool.SetUV(wallUVs[i0]);
-				surfaceTool.SetUV2(wallUV2s[i0]);
-				surfaceTool.SetColor(wallColors[i0]);
-				surfaceTool.AddVertex(wallVerts[i0]);
-
-				surfaceTool.SetNormal(wallNorms[i1]);
-				surfaceTool.SetUV(wallUVs[i1]);
-				surfaceTool.SetUV2(wallUV2s[i1]);
-				surfaceTool.SetColor(wallColors[i1]);
-				surfaceTool.AddVertex(wallVerts[i1]);
-
-				surfaceTool.SetNormal(wallNorms[i2]);
-				surfaceTool.SetUV(wallUVs[i2]);
-				surfaceTool.SetUV2(wallUV2s[i2]);
-				surfaceTool.SetColor(wallColors[i2]);
-				surfaceTool.AddVertex(wallVerts[i2]);
-			}
-
-			ArrayMesh arrayMesh = surfaceTool.Commit();
-			if (TerrainMaterial != null)
-				arrayMesh.SurfaceSetMaterial(0, TerrainMaterial);
-
-			// ── Surface 1: water tiles where waterFlag is set ──
-			if (SeaLevelTile > 0 && WaterMaterial != null)
-			{
-				ReadOnlySpan<Vector3> waterVerts = TileMeshes.GetVertices(TileType.Flat).AsSpan();
-				ReadOnlySpan<Vector3> waterNorms = TileMeshes.GetNormals(TileType.Flat).AsSpan();
-				ReadOnlySpan<Vector2> waterUVs   = TileMeshes.GetUVs(TileType.Flat).AsSpan();
-
-				int wts = ChunkConstants.TILE_SIZE;
-				float wth = ChunkConstants.TILE_HEIGHT;
-				float waterY = SeaLevelTile * wth - wth * 0.5f;
-				bool hasWater = false;
-
-				SurfaceTool waterST = new SurfaceTool();
-				waterST.Begin(Mesh.PrimitiveType.Triangles);
-				waterST.SetSmoothGroup(uint.MaxValue);
-
-				for (int z = 0; z < size; z++)
-				{
-					for (int x = 0; x < size; x++)
-					{
-						int off = (z * size + x) * stride;
-						byte surfByte = dataSpan[off + 2];
-
-						if ((surfByte & ChunkConstants.WATER_FLAG) != 0)
-						{
-							Vector3 waterOffset = new Vector3(x * wts, waterY, z * wts);
-
-							for (int v = 0; v < waterVerts.Length; v++)
-							{
-								waterST.SetNormal(waterNorms[v]);
-								waterST.SetUV(waterUVs[v]);
-								waterST.AddVertex(waterVerts[v] + waterOffset);
-							}
-							hasWater = true;
-						}
-					}
-				}
-
-				if (hasWater)
-				{
-					waterST.Commit(arrayMesh); // adds as surface 1
-					arrayMesh.SurfaceSetMaterial(1, WaterMaterial);
-				}
-			}
-
-			return arrayMesh;
 		}
-		finally
-		{
-			_vertexPool.Return(verticesArray);
-			_normalPool.Return(normalsArray);
-			_colorPool.Return(colorsArray);
-		}
+
+		ArrayMesh mesh = st.Commit();
+		if (mesh == null || mesh.GetSurfaceCount() == 0)
+			return null;
+
+		Material material = TerrainMaterial ?? GetFallbackMaterial();
+		if (material != null)
+			mesh.SurfaceSetMaterial(0, material);
+
+		return mesh;
 	}
 
-	private MeshInstance3D CreateMeshInstance(Mesh mesh, ChunkInfo chunkInfo)
+	private static void AddTriangle(
+		SurfaceTool st,
+		Vector3 a,
+		Vector3 b,
+		Vector3 c,
+		Vector2 uvA,
+		Vector2 uvB,
+		Vector2 uvC,
+		byte surfaceId,
+		Color color)
 	{
-		int worldSize = ChunkConstants.CHUNK_WORLD_SIZE;
-		var meshInstance = new MeshInstance3D
+		Vector3 n = (c - a).Cross(b - a);
+		if (n.LengthSquared() < 0.000001f)
+			return;
+
+		n = n.Normalized();
+		Vector2 uv2 = new Vector2(surfaceId, 0f);
+
+		st.SetNormal(n);
+		st.SetUV(uvA);
+		st.SetUV2(uv2);
+		st.SetColor(color);
+		st.AddVertex(a);
+
+		st.SetNormal(n);
+		st.SetUV(uvB);
+		st.SetUV2(uv2);
+		st.SetColor(color);
+		st.AddVertex(b);
+
+		st.SetNormal(n);
+		st.SetUV(uvC);
+		st.SetUV2(uv2);
+		st.SetColor(color);
+		st.AddVertex(c);
+	}
+
+	private static int GetHeight(byte[] data, int x, int z)
+	{
+		int vertexSize = ChunkConstants.CHUNK_VERTEX_SIZE;
+		x = Math.Clamp(x, 0, vertexSize - 1);
+		z = Math.Clamp(z, 0, vertexSize - 1);
+		int idx = ChunkConstants.HEIGHTS_OFFSET + z * vertexSize + x;
+		return data[idx];
+	}
+
+	private static byte GetSurface(byte[] data, int x, int z)
+	{
+		int size = ChunkConstants.CHUNK_SIZE;
+		x = Math.Clamp(x, 0, size - 1);
+		z = Math.Clamp(z, 0, size - 1);
+		int idx = ChunkConstants.CELLS_OFFSET + z * size + x;
+		return (byte)(data[idx] & ChunkConstants.SURFACE_MASK);
+	}
+
+	private static Color GetSurfaceColor(byte surfaceId)
+	{
+		if (surfaceId < SurfaceRegistry.Count)
+			return SurfaceRegistry.Surfaces[surfaceId].Tint;
+
+		return new Color(0.45f, 0.72f, 0.42f, 1f);
+	}
+
+	private static Material GetFallbackMaterial()
+	{
+		if (_fallbackMaterial != null)
+			return _fallbackMaterial;
+
+		_fallbackMaterial = new StandardMaterial3D
 		{
-			Mesh = mesh,
-			Name = $"Chunk_{chunkInfo.X}_{chunkInfo.Z}"
+			VertexColorUseAsAlbedo = true,
+			Roughness = 1f,
+			Metallic = 0f
 		};
 
-		meshInstance.Position = new Vector3(chunkInfo.X * worldSize, 0, chunkInfo.Z * worldSize);
+		return _fallbackMaterial;
+	}
 
-		ParentNode?.AddChild(meshInstance);
+	private MeshInstance3D CreateMeshInstance(Mesh mesh, ChunkInfo info)
+	{
+		MeshInstance3D meshInstance = new MeshInstance3D
+		{
+			Mesh = mesh,
+			Name = $"Chunk_{info.X}_{info.Z}",
+			Position = new Vector3(
+				info.X * ChunkConstants.CHUNK_WORLD_SIZE,
+				0,
+				info.Z * ChunkConstants.CHUNK_WORLD_SIZE)
+		};
+
+		ParentNode.AddChild(meshInstance);
 		return meshInstance;
 	}
 }

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://6oxpy5qmamri"
-path="res://.godot/imported/check_43.png-a0b661cb29f243f1941ab2c052d800d8.ctex"
+uid="uid://dfarkjtiygrv7"
+path="res://.godot/imported/dev_grid_02.png-9c68950ce48bdb667db219bc5154a7c7.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Terrain/Textures/preview/check_43.png"
-dest_files=["res://.godot/imported/check_43.png-a0b661cb29f243f1941ab2c052d800d8.ctex"]
+source_file="res://Terrain/Textures/tiles/dev_grid_02.png"
+dest_files=["res://.godot/imported/dev_grid_02.png-9c68950ce48bdb667db219bc5154a7c7.ctex"]
 
 [params]
 

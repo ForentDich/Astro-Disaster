@@ -53,7 +53,6 @@ public partial class GameplaySession : Node
             new GameplayMovementSystem(),
             new GameplayEntityRotationSystem(),
             new GameplayCameraFollowSystem(),
-            new TileCursorSystem(),
         };
     }
 

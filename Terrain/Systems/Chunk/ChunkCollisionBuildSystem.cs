@@ -4,110 +4,92 @@ using Godot;
 using System;
 using System.Collections.Generic;
 
+/// <summary>
+/// Builds chunk collision from the same grid triangulation as ChunkMeshBuildSystem.
+/// </summary>
 public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 {
-	public int MaxPerFrame { get; set; } = 4;
-	public Node ParentNode { get; set; }
-	public Node3D Viewer { get; set; }
-	public bool DebugCollision { get; set; } = false; 
-	
 	private EntityStore _store;
+	private ArchetypeQuery<ChunkInfo, ChunkCollider> _removalQuery;
+
 	private int[] _selectedEntityIds;
 	private int[] _selectedDistances;
 	private int _selectedCount;
 
-	private ArchetypeQuery<ChunkInfo, ChunkCollider> _removalQuery;
-	private ArchetypeQuery<ChunkInfo, ChunkTerrain> _allTerrainQuery;
-	private readonly Dictionary<(int, int), int> _chunkLookup = new();
+	public int MaxPerFrame { get; set; } = 4;
+	public Node ParentNode { get; set; }
+	public Node3D Viewer { get; set; }
 
-	public ChunkCollisionBuildSystem() => Filter.AllTags(Tags.Get<NeedsCollision, ChunkComplete>());
+	public ChunkCollisionBuildSystem()
+		=> Filter.AllTags(Tags.Get<NeedsCollision, ChunkComplete>())
+			.WithoutAnyTags(Tags.Get<PendingRemoval>());
 
 	protected override void OnAddStore(EntityStore store)
 	{
 		base.OnAddStore(store);
 		_store = store;
-
 		_removalQuery = store.Query<ChunkInfo, ChunkCollider>()
 			.WithoutAnyTags(Tags.Get<NeedsCollision>());
-		
-		_allTerrainQuery = store.Query<ChunkInfo, ChunkTerrain>();
 	}
 
 	protected override void OnUpdate()
 	{
 		var buffer = CommandBuffer;
+		RemoveDisabledColliders(buffer);
 
-		RemoveOutOfRangeCollisions(buffer);
+		if (ParentNode == null || MaxPerFrame <= 0)
+			return;
 
-		if (MaxPerFrame > 0 && ParentNode != null)
-			BuildNewCollisions(buffer);
+		BuildColliders(buffer);
 	}
 
-	private void RemoveOutOfRangeCollisions(CommandBuffer buffer)
+	private void RemoveDisabledColliders(CommandBuffer buffer)
 	{
 		foreach (var entity in _removalQuery.Entities)
 		{
 			if (!entity.TryGetComponent<ChunkCollider>(out var collider))
 				continue;
 
-			var body = collider.GetBody();
-			body?.QueueFree();
-
+			collider.GetBody()?.QueueFree();
 			buffer.RemoveComponent<ChunkCollider>(entity.Id);
 		}
 	}
 
-	private byte[] GetNeighborData(int cx, int cz)
+	private void BuildColliders(CommandBuffer buffer)
 	{
-		if (_chunkLookup.TryGetValue((cx, cz), out int nId) &&
-			_store.TryGetEntityById(nId, out var nEnt) && !nEnt.IsNull &&
-			nEnt.TryGetComponent<ChunkTerrain>(out var nTerrain))
-		{
-			return nTerrain.Data;
-		}
-		return null;
-	}
-
-	private void BuildNewCollisions(CommandBuffer buffer)
-	{
-		if (Viewer == null) return;
-
-		// Build coordinate → entityId lookup for neighbor queries
-		_chunkLookup.Clear();
-		foreach (var e in _allTerrainQuery.Entities)
-		{
-			ref var ci = ref e.GetComponent<ChunkInfo>();
-			_chunkLookup[(ci.X, ci.Z)] = e.Id;
-		}
-
-		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_WORLD_SIZE);
+		(int centerX, int centerZ) = Viewer != null
+			? NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_WORLD_SIZE)
+			: (0, 0);
 
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
 		_selectedCount = 0;
 
 		foreach (var entity in Query.Entities)
 		{
-			if (!entity.HasComponent<ChunkMesh>())
+			if (entity.HasComponent<ChunkCollider>())
 				continue;
 
 			ref var info = ref entity.GetComponent<ChunkInfo>();
-			int dist = Math.Max(Math.Abs(info.X - centerX), Math.Abs(info.Z - centerZ));
-			NearestChunkSelectionTool.TryInsertNearest(ref _selectedCount, _selectedEntityIds, _selectedDistances, entity.Id, dist, MaxPerFrame);
+			int dist = Viewer != null
+				? Math.Max(Math.Abs(info.X - centerX), Math.Abs(info.Z - centerZ))
+				: 0;
+
+			NearestChunkSelectionTool.TryInsertNearest(
+				ref _selectedCount,
+				_selectedEntityIds,
+				_selectedDistances,
+				entity.Id,
+				dist,
+				MaxPerFrame);
 		}
 
 		for (int i = 0; i < _selectedCount; i++)
 		{
 			int entityId = _selectedEntityIds[i];
-
 			if (!_store.TryGetEntityById(entityId, out var entity) || entity.IsNull)
 				continue;
 
-			// Если уже есть коллизия - пропускаем
 			if (entity.HasComponent<ChunkCollider>())
-				continue;
-
-			// Дополнительная проверка наличия меша
-			if (!entity.HasComponent<ChunkMesh>())
 				continue;
 
 			try
@@ -115,131 +97,98 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				ref var info = ref entity.GetComponent<ChunkInfo>();
 				ref var terrain = ref entity.GetComponent<ChunkTerrain>();
 
-				byte[] rightData = GetNeighborData(info.X + 1, info.Z);
-				byte[] bottomData = GetNeighborData(info.X, info.Z + 1);
-
-				var body = BuildTileCollisionBody(terrain.Data, rightData, bottomData, info);
-				
+				StaticBody3D body = BuildCollisionBody(terrain.Data, info);
 				if (body != null)
-				{
 					buffer.AddComponent(entityId, new ChunkCollider { BodyId = body.GetInstanceId() });
-					
-				}
 			}
 			catch (Exception ex)
 			{
-				GD.PrintErr($"[ChunkCollisionBuildSystem] >> Error building collision: {ex}");
+				GD.PrintErr($"[ChunkCollisionBuildSystem] Error building collider for entity {entityId}: {ex.Message}");
 			}
 		}
 	}
 
-	private StaticBody3D BuildTileCollisionBody(byte[] terrainData, byte[] rightNeighborData, byte[] bottomNeighborData, ChunkInfo info)
+	private StaticBody3D BuildCollisionBody(byte[] data, ChunkInfo info)
 	{
-		if (ParentNode == null) 
-		{
-			GD.PrintErr("[ChunkCollisionBuildSystem] ParentNode is null!");
+		if (data == null || data.Length < ChunkConstants.CHUNK_DATA_SIZE)
 			return null;
-		}
 
+		List<Vector3> faces = BuildFaces(data);
+		if (faces.Count == 0)
+			return null;
+
+		ConcavePolygonShape3D shape = new ConcavePolygonShape3D();
+		shape.SetFaces(faces.ToArray());
+
+		CollisionShape3D collisionShape = new CollisionShape3D
+		{
+			Shape = shape,
+			Name = $"Collision_{info.X}_{info.Z}"
+		};
+
+		StaticBody3D body = new StaticBody3D
+		{
+			Name = $"ChunkBody_{info.X}_{info.Z}",
+			CollisionLayer = 1,
+			CollisionMask = 1,
+			Position = new Vector3(
+				info.X * ChunkConstants.CHUNK_WORLD_SIZE,
+				0,
+				info.Z * ChunkConstants.CHUNK_WORLD_SIZE)
+		};
+
+		body.AddChild(collisionShape);
+		ParentNode.AddChild(body);
+		return body;
+	}
+
+	private static List<Vector3> BuildFaces(byte[] data)
+	{
 		int size = ChunkConstants.CHUNK_SIZE;
-		var triangles = new List<Vector3>();
+		float step = ChunkConstants.TILE_SIZE;
+		float heightStep = ChunkConstants.TILE_HEIGHT;
 
+		List<Vector3> faces = new List<Vector3>(size * size * 6);
 
 		for (int z = 0; z < size; z++)
 		{
 			for (int x = 0; x < size; x++)
 			{
-				int dataOffset = (z * size + x) * ChunkConstants.BYTES_PER_TILE;
-				
-				int baseHeight = terrainData[dataOffset];
-				TileType tileType = (TileType)terrainData[dataOffset + 1];
-				
-				Vector3[] tileVertices = TileMeshes.GetVertices(tileType);
-				int ts = ChunkConstants.TILE_SIZE;
-				float th = ChunkConstants.TILE_HEIGHT;
-				Vector3 tileOffset = new Vector3(x * ts, baseHeight * th, z * ts);
-				
-				for (int v = 0; v < tileVertices.Length; v++)
-				{
-					triangles.Add(tileVertices[v] + tileOffset);
-				}
+				int hNW = GetHeight(data, x, z);
+				int hNE = GetHeight(data, x + 1, z);
+				int hSW = GetHeight(data, x, z + 1);
+				int hSE = GetHeight(data, x + 1, z + 1);
+
+				Vector3 nw = new Vector3(x * step, hNW * heightStep, z * step);
+				Vector3 ne = new Vector3((x + 1) * step, hNE * heightStep, z * step);
+				Vector3 sw = new Vector3(x * step, hSW * heightStep, (z + 1) * step);
+				Vector3 se = new Vector3((x + 1) * step, hSE * heightStep, (z + 1) * step);
+
+				AddFace(faces, nw, ne, se);
+				AddFace(faces, nw, se, sw);
 			}
 		}
 
-		ReadOnlySpan<byte> rightSpan = rightNeighborData != null ? new ReadOnlySpan<byte>(rightNeighborData) : ReadOnlySpan<byte>.Empty;
-		ReadOnlySpan<byte> bottomSpan = bottomNeighborData != null ? new ReadOnlySpan<byte>(bottomNeighborData) : ReadOnlySpan<byte>.Empty;
-
-		var wallVerts = new List<Vector3>(512);
-		var wallNorms = new List<Vector3>(); 
-		var wallUVs = new List<Vector2>();
-		var wallUV2s = new List<Vector2>();
-		var wallColors = new List<Color>();
-		var wallIndices = new List<int>(512);
-
-		WallAutoMapper.GenerateWalls(wallVerts, wallNorms, wallUVs, wallUV2s, wallColors, wallIndices, terrainData, size, rightSpan, bottomSpan);
-
-		for (int i = 0; i < wallIndices.Count; i++)
-		{
-			triangles.Add(wallVerts[wallIndices[i]]);
-		}
-
-		var concaveShape = new ConcavePolygonShape3D();
-		concaveShape.SetFaces(triangles.ToArray());
-
-		var collisionShape = new CollisionShape3D
-		{
-			Shape = concaveShape,
-			Name = $"Collision_{info.X}_{info.Z}"
-		};
-
-		var staticBody = new StaticBody3D
-		{
-			Name = $"ChunkBody_{info.X}_{info.Z}",
-			CollisionLayer = 1,
-			CollisionMask = 1
-		};
-
-		staticBody.AddChild(collisionShape);
-		staticBody.Position = new Vector3(info.X * ChunkConstants.CHUNK_WORLD_SIZE, 0, info.Z * ChunkConstants.CHUNK_WORLD_SIZE);
-
-		if (DebugCollision)
-		{
-			AddCollisionDebugVisual(staticBody, triangles, info);
-		}
-
-		ParentNode.AddChild(staticBody);
-		return staticBody;
+		return faces;
 	}
 
-	private void AddCollisionDebugVisual(StaticBody3D body, List<Vector3> triangles, ChunkInfo info)
+	private static void AddFace(List<Vector3> faces, Vector3 a, Vector3 b, Vector3 c)
 	{
-		var surfaceTool = new SurfaceTool();
-		surfaceTool.Begin(Mesh.PrimitiveType.Triangles);
-		
-		for (int i = 0; i < triangles.Count; i += 3)
-		{
-			if (i + 2 >= triangles.Count) break;
-			
-			surfaceTool.AddVertex(triangles[i]);
-			surfaceTool.AddVertex(triangles[i + 1]);
-			surfaceTool.AddVertex(triangles[i + 2]);
-		}
-		
-		var material = new StandardMaterial3D();
-		material.Transparency = BaseMaterial3D.TransparencyEnum.Alpha;
-		material.AlbedoColor = new Color(1, 1, 0, 0.2f);
-		material.ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded;
-		
-		surfaceTool.SetMaterial(material);
-		var debugMesh = surfaceTool.Commit();
-		
-		var meshInstance = new MeshInstance3D
-		{
-			Mesh = debugMesh,
-			Name = $"DebugCollision_{info.X}_{info.Z}",
-			CastShadow = GeometryInstance3D.ShadowCastingSetting.Off
-		};
-		
-		body.AddChild(meshInstance);
+		Vector3 n = (b - a).Cross(c - a);
+		if (n.LengthSquared() < 0.000001f)
+			return;
+
+		faces.Add(a);
+		faces.Add(b);
+		faces.Add(c);
+	}
+
+	private static int GetHeight(byte[] data, int x, int z)
+	{
+		int vertexSize = ChunkConstants.CHUNK_VERTEX_SIZE;
+		x = Math.Clamp(x, 0, vertexSize - 1);
+		z = Math.Clamp(z, 0, vertexSize - 1);
+		int idx = ChunkConstants.HEIGHTS_OFFSET + z * vertexSize + x;
+		return data[idx];
 	}
 }

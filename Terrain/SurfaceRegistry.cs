@@ -7,13 +7,19 @@ using System.Text.Json;
 ///
 /// Adding a new material:
 ///   1. Add a line to surfaces.json (name, tint, texture, slopeVariant)
-///   2. Put texture in VTerrain/Textures/tiles/  (optional, tint works without it)
+///   2. Put texture in Terrain/Textures/tiles/  (optional, tint works without it)
 ///   3. Done — no code changes!
 /// </summary>
 public static class SurfaceRegistry
 {
     private const string SURFACES_PATH = "res://Terrain/Data/surfaces.json";
     private const string TEXTURE_DIR   = "res://Terrain/Textures/tiles/";
+
+    /// <summary>
+    /// Optional root directory for texture files from surfaces.json.
+    /// Examples: "res://MyPack/Terrain/tiles/", "user://resourcepacks/pack1/tiles/"
+    /// </summary>
+    public static string TextureDirectoryOverride { get; set; }
 
     public struct SurfaceEntry
     {
@@ -30,7 +36,7 @@ public static class SurfaceRegistry
     public static int Count => Surfaces.Length;
 
     /// <summary>
-    /// Loads surfaces.json. Call once at startup before SurfaceMapper.Initialize().
+    /// Loads surfaces.json. Call once at startup.
     /// </summary>
     public static void Load()
     {
@@ -87,13 +93,33 @@ public static class SurfaceRegistry
                 SlopeVariant = el.GetProperty("slopeVariant").GetInt32(),
                 NoiseStrength = el.TryGetProperty("noiseStrength", out var nsProp)
                     ? nsProp.GetSingle() : 1.0f,
-                TexturePath = texFile != null ? $"{TEXTURE_DIR}{texFile}" : null,
+                TexturePath = ResolveTexturePath(texFile),
                 TreeType = el.TryGetProperty("treeType", out var ttProp)
                     ? Enum.Parse<TreeType>(ttProp.GetString(), true) : TreeType.None,
                 TreeDensity = el.TryGetProperty("treeDensity", out var tdProp)
                     ? tdProp.GetSingle() : 0f,
             };
         }
+    }
+
+    private static string ResolveTexturePath(string textureFileName)
+    {
+        if (string.IsNullOrWhiteSpace(textureFileName))
+            return null;
+
+        string root = string.IsNullOrWhiteSpace(TextureDirectoryOverride)
+            ? TEXTURE_DIR
+            : NormalizeDirectory(TextureDirectoryOverride);
+
+        return root + textureFileName;
+    }
+
+    private static string NormalizeDirectory(string dir)
+    {
+        dir = dir.Trim();
+        if (!dir.EndsWith("/", StringComparison.Ordinal))
+            dir += "/";
+        return dir;
     }
 
 }

@@ -1,10 +1,6 @@
-// GameSession.cs
 using Friflo.Engine.ECS;
 using Friflo.Engine.ECS.Systems;
 using Godot;
-using System;
-using System.Collections.Generic;
-using System.IO;
 
 public partial class GameSession : Node
 {
@@ -29,37 +25,29 @@ public partial class GameSession : Node
 
 	[ExportGroup("Rendering")]
 	[Export] public Material TerrainMaterial { get; set; }
+	[Export] public string TexturePackDirectory { get; set; } = "";
 	[Export] public Material WaterMaterial { get; set; }
 	[Export] public Material TrunkMaterial { get; set; }
 	[Export] public Material CanopyMaterial { get; set; }
 
-	// Добавляем параметры для мира
 	[ExportGroup("World")]
 	[Export] public string WorldName { get; set; } = "MyWorld";
 	[Export] public int WorldSeed { get; set; } = 12345;
 
-	public static GameSession Instance { get; private set; } // Добавили Синглтон
-	public EntityStore Store => _store; // Открыли доступ к Store
+	public static GameSession Instance { get; private set; }
+	public EntityStore Store => _store;
 
 	private EntityStore _store;
 	private SystemRoot _systems;
-
-	// ── System references (for regeneration) ──
-	private ChunkMeshBuildSystem _meshBuildSystem;
-	private ChunkCollisionBuildSystem _collisionBuildSystem; // Вынесли в поле класса
 	private SystemSegmentCreator _segmentCreator;
 	private SegmentDataGenerationSystem _segmentDataGen;
 	private ChunkDataGenerationSystem _chunkDataGen;
+	private ChunkMeshBuildSystem _meshBuildSystem;
+	private ChunkCollisionBuildSystem _collisionBuildSystem;
 
-	private float _smoothedFrameMs = 16.6f;
-	private float _budgetTimer;
-	private int _meshBudget;
-	private int _dataGenBudget; // Добавили бюджет данных
-	private int _collisionBudget; // Добавили бюджет коллизий
-
-	// ── Debug overlay ──
 	private Label _biomeLabel;
 	private bool _debugVisible;
+	private int _tick;
 
 
 	private void SetupNoiseSettings()
@@ -71,46 +59,58 @@ public partial class GameSession : Node
 		}
 	}
 
-	/// <summary>
-	/// Computes sea level in tile-height units: coastLevel × HeightScale × MAX_HEIGHT.
-	/// </summary>
-	private int ComputeSeaLevelTile()
-	{
-		NoiseSettings.EnsureCurves();
-		float coastLevel = NoiseSettings.ContinentCurve.Sample(NoiseSettings.CoastStart);
-		return Mathf.RoundToInt(coastLevel * HeightScale * ConstantsCelestial.MAX_HEIGHT);
-	}
-
-	/// <summary>
-	/// Loads surfaces and height rules from JSON, builds shader LUT textures.
-	/// </summary>
 	private void SetupTerrain()
 	{
-		// Load surface definitions and height rules from JSON
+		SurfaceRegistry.TextureDirectoryOverride = string.IsNullOrWhiteSpace(TexturePackDirectory)
+			? null
+			: TexturePackDirectory;
+
 		SurfaceRegistry.Load();
-
-		// Load biome definitions (must be before SurfaceMapper.Initialize)
 		BiomeRegistry.Load();
-
-		// Build lookup tables for fast surface assignment
-		SurfaceMapper.Initialize();
-
-		// Load tree type materials (textures + colors)
 		TreeTypeRegistry.Load();
+	}
 
-		// Build Texture2DArray + LUT textures and assign to shader
-		if (TerrainMaterial is ShaderMaterial shaderMat)
+	private void SetupTerrainMaterial()
+	{
+		if (TerrainMaterial is ShaderMaterial shaderMaterial)
 		{
-			TerrainTextureLoader.Apply(shaderMat);
+			TerrainTextureLoader.Apply(shaderMaterial);
+			return;
 		}
+
+		if (TerrainMaterial != null)
+		{
+			GD.Print("[TerrainWorld] TerrainMaterial is not a ShaderMaterial. Keeping current material.");
+			return;
+		}
+
+		Shader shader = GD.Load<Shader>("res://Terrain/Shaders/terrain_tiles.gdshader");
+		if (shader == null)
+		{
+			GD.PrintErr("[TerrainWorld] Missing terrain shader: res://Terrain/Shaders/terrain_tiles.gdshader");
+			return;
+		}
+
+		ShaderMaterial autoMaterial = new ShaderMaterial { Shader = shader };
+		TerrainTextureLoader.Apply(autoMaterial);
+		TerrainMaterial = autoMaterial;
+		GD.Print("[TerrainWorld] Auto-created terrain material with texture array.");
+	}
+
+	private int ComputeSeaLevelHeight()
+	{
+		NoiseSettings.EnsureCurves();
+		float coast = NoiseSettings.ContinentCurve.Sample(NoiseSettings.CoastStart);
+		return Mathf.RoundToInt(coast * HeightScale * ConstantsCelestial.MAX_HEIGHT);
 	}
 
 	public override void _Ready()
 	{
-		Instance = this; // Инициализация синглтона
+		Instance = this;
 
 		SetupNoiseSettings();
 		SetupTerrain();
+		SetupTerrainMaterial();
 
 		_store = new EntityStore();
 
@@ -130,12 +130,14 @@ public partial class GameSession : Node
 			UnloadRadius = ConstantsSegment.UNLOAD_RADIUS
 		};
 
+		int seaLevelHeight = ComputeSeaLevelHeight();
+
 		_segmentDataGen = new SegmentDataGenerationSystem
 		{
 			NoiseSettings = NoiseSettings,
 			HeightScale = HeightScale,
 			MaxPerFrame = 1,
-			SeaLevelTile = ComputeSeaLevelTile()
+			SeaLevelHeight = seaLevelHeight
 		};
 
 		var visibilitySystem = new ChunkVisibilitySystem
@@ -151,16 +153,6 @@ public partial class GameSession : Node
 			MaxPerFrame = MaxRemovalPerFrame
 		};
 
-		_chunkDataGen = new ChunkDataGenerationSystem
-		{
-			Viewer = Viewer,
-			MaxPerFrame = MaxDataGenPerFrame,
-			NoiseSettings = NoiseSettings,
-			HeightScale = HeightScale,
-			SegmentCreator = _segmentCreator,
-			SeaLevelTile = ComputeSeaLevelTile()
-		};
-
 		var chunkLoadSystem = new ChunkLoadSystem
 		{
 			Viewer = Viewer,
@@ -168,13 +160,21 @@ public partial class GameSession : Node
 			SegmentCreator = _segmentCreator
 		};
 
+		_chunkDataGen = new ChunkDataGenerationSystem
+		{
+			Viewer = Viewer,
+			MaxPerFrame = MaxDataGenPerFrame,
+			NoiseSettings = NoiseSettings,
+			HeightScale = HeightScale,
+			SegmentCreator = _segmentCreator,
+			SeaLevelHeight = seaLevelHeight
+		};
+
 		_meshBuildSystem = new ChunkMeshBuildSystem
 		{
 			Viewer = Viewer,
 			MaxPerFrame = MaxMeshBuildPerFrame,
 			TerrainMaterial = TerrainMaterial,
-			WaterMaterial = WaterMaterial,
-			SeaLevelTile = ComputeSeaLevelTile(),
 			ParentNode = this
 		};
 
@@ -184,28 +184,6 @@ public partial class GameSession : Node
 			MaxPerFrame = MaxCollisionBuildPerFrame,
 			ParentNode = this
 		};
-
-		var terrainEditorSystem = new TerrainEditorSystem(); // Подключаем редактор
-
-		// ── Trees ──
-		var treeRoot = new Node3D { Name = "Trees" };
-		AddChild(treeRoot);
-
-		var treeSpawnSystem = new TreeSpawnSystem
-		{
-			SeaLevelTile     = ComputeSeaLevelTile(),
-			SurfaceTreeMap   = SurfaceRegistry.TreeTypeMap,
-			SurfaceDensityMap = SurfaceRegistry.TreeDensityMap
-		};
-
-		var treeRenderSystem = new TreeRenderSystem
-		{
-			TreeRoot = treeRoot
-		};
-
-		_meshBudget = Mathf.Max(1, MaxMeshBuildPerFrame);
-		_dataGenBudget = Mathf.Max(1, MaxDataGenPerFrame);
-		_collisionBudget = Mathf.Max(1, MaxCollisionBuildPerFrame);
 
 		_systems = new SystemRoot(_store)
 		{
@@ -217,21 +195,13 @@ public partial class GameSession : Node
 			removalSystem,
 			chunkLoadSystem,
 			_chunkDataGen,
-			terrainEditorSystem, // Добавили в список обновления (До MeshBuild)
 			_meshBuildSystem,
 			_collisionBuildSystem,
-			//treeSpawnSystem,
-			//treeRenderSystem,
 		};
 	}
 
-	private int _tick;
-
 	public override void _Process(double delta)
 	{
-		if (AutoAdjustBudgets)
-			AutoTuneBudgets((float)delta);
-
 		_systems.Update(new UpdateTick((float)delta, _tick++));
 
 		UpdateDebugLabel();
@@ -274,74 +244,44 @@ public partial class GameSession : Node
 		var noiseGen = _segmentDataGen?.NoiseGenerator;
 
 		string zoneName = "N/A";
-		string cValue = "—";
-		string eValue = "—";
+		string cValue = "-";
+		string eValue = "-";
 		string biomeName = "N/A";
+
 		if (noiseGen != null)
 		{
-			float C = noiseGen.GetContinentalness(pos.X, pos.Z);
-			float E = noiseGen.GetErosion(pos.X, pos.Z);
-			var zone = noiseGen.GetZone(C);
-			cValue = C.ToString("F3");
-			eValue = E.ToString("F3");
+			float c = noiseGen.GetContinentalness(pos.X, pos.Z);
+			float e = noiseGen.GetErosion(pos.X, pos.Z);
+			var zone = noiseGen.GetZone(c);
+
+			cValue = c.ToString("F3");
+			eValue = e.ToString("F3");
 			zoneName = zone switch
 			{
-				ContinentalZone.Ocean     => "Океан",
-				ContinentalZone.Coast     => "Берег",
-				ContinentalZone.Inland    => "Суша",
+				ContinentalZone.Ocean => "Океан",
+				ContinentalZone.Coast => "Берег",
+				ContinentalZone.Inland => "Суша",
 				ContinentalZone.FarInland => "Глубина континента",
-				ContinentalZone.River     => "Река",
+				ContinentalZone.River => "Река",
 				_ => zone.ToString()
 			};
 
-			int biomeIdx = BiomeRegistry.GetBiome((int)zone, E);
-			if (biomeIdx < BiomeRegistry.Count)
+			int biomeIdx = BiomeRegistry.GetBiome((int)zone, e);
+			if (biomeIdx >= 0 && biomeIdx < BiomeRegistry.Count)
 				biomeName = BiomeRegistry.Biomes[biomeIdx].Name;
 		}
 
-		_biomeLabel.Text = $"Зона: {zoneName} (C={cValue})\n" +
-						   $"Эрозия: {eValue}\n" +
-						   $"Биом: {biomeName}\n" +
-						   $"Координаты: {pos.X:F0}, {pos.Y:F0}, {pos.Z:F0}";
-	}
-	
-
-	private void AutoTuneBudgets(float delta)
-	{
-		float frameMs = delta * 1000f;
-		_smoothedFrameMs = Mathf.Lerp(_smoothedFrameMs, frameMs, 0.10f);
-
-		_budgetTimer += delta;
-		if (_budgetTimer < 0.25f)
-			return;
-		_budgetTimer = 0f;
-
-		int maxMesh = Mathf.Max(1, MaxMeshBuildPerFrame);
-		int maxData = Mathf.Max(1, MaxDataGenPerFrame);
-		int maxColl = Mathf.Max(1, MaxCollisionBuildPerFrame);
-
-		if (_smoothedFrameMs > 22f)
-		{
-			_meshBudget = Math.Max(1, _meshBudget - 1);
-			_dataGenBudget = Math.Max(1, _dataGenBudget - 1);
-			_collisionBudget = Math.Max(1, _collisionBudget - 1);
-		}
-		else if (_smoothedFrameMs < 14f)
-		{
-			_meshBudget = Math.Min(maxMesh, _meshBudget + 1);
-			_dataGenBudget = Math.Min(maxData, _dataGenBudget + 1);
-			_collisionBudget = Math.Min(maxColl, _collisionBudget + 1);
-		}
-
-		_meshBuildSystem.MaxPerFrame = _meshBudget;
-		_chunkDataGen.MaxPerFrame = _dataGenBudget;
-		if (_collisionBuildSystem != null)
-			_collisionBuildSystem.MaxPerFrame = _collisionBudget;
+		_biomeLabel.Text =
+			"Mode: Grid chunks\n" +
+			$"Зона: {zoneName} (C={cValue})\n" +
+			$"Эрозия: {eValue}\n" +
+			$"Биом: {biomeName}\n" +
+			$"Coords: {pos.X:F0}, {pos.Y:F0}, {pos.Z:F0}";
 	}
 
 	public override void _ExitTree()
 	{
-		if (Instance == this) Instance = null; // Очистка синглтона
+		if (Instance == this) Instance = null;
 
 		if (_store == null) return;
 
@@ -350,7 +290,7 @@ public partial class GameSession : Node
 			if (entity.TryGetComponent<ChunkMesh>(out var mesh))
 			{
 				mesh.GetMesh()?.QueueFree();
-				entity.RemoveComponent<ChunkMesh>(); // Безопасное удаление компонента
+				entity.RemoveComponent<ChunkMesh>();
 			}
 			if (entity.TryGetComponent<ChunkCollider>(out var collider))
 			{

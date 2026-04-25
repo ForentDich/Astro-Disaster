@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://eltplkoh36av"
-path="res://.godot/imported/0052-gravel-texture-seamless.jpg-f36de1686dfe6ae942b37d2641a0524e.ctex"
+uid="uid://ubg4atxc5ue8"
+path="res://.godot/imported/dev_grid_01.png-e730c1fc8afee35101f8454ca3ca1575.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Terrain/Textures/source/0052-gravel-texture-seamless.jpg"
-dest_files=["res://.godot/imported/0052-gravel-texture-seamless.jpg-f36de1686dfe6ae942b37d2641a0524e.ctex"]
+source_file="res://Terrain/Textures/tiles/dev_grid_01.png"
+dest_files=["res://.godot/imported/dev_grid_01.png-e730c1fc8afee35101f8454ca3ca1575.ctex"]
 
 [params]
 

@@ -14,8 +14,7 @@ public struct ChunkInfo : IComponent {
 public struct ChunkTerrain : IComponent
 {
 	/// <summary>
-	/// Tile data: CHUNK_SIZE×CHUNK_SIZE tiles × BYTES_PER_TILE.
-	/// Boundary walls are built using neighbor chunk data at mesh-build time.
+	/// Terrain payload: 33x33 vertex heights + 32x32 cell surfaces.
 	/// Persisted as-is to .seg files.
 	/// </summary>
 	public byte[] Data;

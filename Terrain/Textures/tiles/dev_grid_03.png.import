@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cak3wdw0ib2qs"
-path="res://.godot/imported/seamless-sand-texture-summer-backgrounds-beach-desert-pattern-vector-217929149.webp-393c14c9c088bc2608d56e7d3882155f.ctex"
+uid="uid://b206d3dyrn0di"
+path="res://.godot/imported/dev_grid_03.png-156b4bbf00c7a68919ce7686e31f3da5.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://Terrain/Textures/source/seamless-sand-texture-summer-backgrounds-beach-desert-pattern-vector-217929149.webp"
-dest_files=["res://.godot/imported/seamless-sand-texture-summer-backgrounds-beach-desert-pattern-vector-217929149.webp-393c14c9c088bc2608d56e7d3882155f.ctex"]
+source_file="res://Terrain/Textures/tiles/dev_grid_03.png"
+dest_files=["res://.godot/imported/dev_grid_03.png-156b4bbf00c7a68919ce7686e31f3da5.ctex"]
 
 [params]
 
