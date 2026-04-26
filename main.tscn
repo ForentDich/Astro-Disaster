@@ -120,7 +120,7 @@ Step = 30
 Mode = 1
 
 [node name="Player" parent="." unique_id=73761922 instance=ExtResource("9_kek77")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 105.32092, 89.20325)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1000, 89.203)
 script = ExtResource("9_4c57u")
 Speed = 15.0
 MaxFallSpeed = 18.0

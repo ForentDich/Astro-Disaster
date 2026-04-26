@@ -6,6 +6,7 @@ using System;
 /// <summary>
 /// Generates chunk data for chunks that were not found on disk.
 /// Data layout per chunk: 33x33 heights + 32x32 surface bytes.
+/// Uses FaceIndex from ChunkInfo to save to the correct face storage path.
 /// </summary>
 public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 {
@@ -108,7 +109,7 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 		}
 		catch (Exception ex)
 		{
-			GD.PrintErr($"[ChunkDataGen] Error generating chunk ({info.X},{info.Z}): {ex.Message}");
+			GD.PrintErr($"[ChunkDataGen] Error generating chunk ({info.X},{info.Z}) face {info.FaceIndex}: {ex.Message}");
 			commandBuffer.RemoveTag<ChunkPending>(entityId);
 			commandBuffer.AddTag<ChunkError>(entityId);
 		}
@@ -183,7 +184,8 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 		if (SegmentCreator == null)
 			return;
 
-		string facePath = SegmentCreator.FaceStoragePath;
+		// Use FaceIndex to get the correct face storage path
+		string facePath = SegmentCreator.GetFaceStoragePath(info.FaceIndex);
 		if (string.IsNullOrEmpty(facePath))
 			return;
 
@@ -191,11 +193,19 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 		{
 			string segPath = SegmentFile.GetSegmentFilePath(facePath, info.X, info.Z);
 			var (localX, localZ) = SegmentFile.ChunkToLocal(info.X, info.Z);
+
+			// Ensure the segment file exists — create it if missing.
+			string absPath = ProjectSettings.GlobalizePath(segPath);
+			if (!System.IO.File.Exists(absPath))
+			{
+				SegmentFile.CreateEmpty(segPath);
+			}
+
 			SegmentFile.WriteChunk(segPath, localX, localZ, terrainData);
 		}
 		catch (Exception ex)
 		{
-			GD.PrintErr($"[ChunkDataGen] Failed to save chunk ({info.X},{info.Z}): {ex.Message}");
+			GD.PrintErr($"[ChunkDataGen] Failed to save chunk ({info.X},{info.Z}) face {info.FaceIndex}: {ex.Message}");
 		}
 	}
 

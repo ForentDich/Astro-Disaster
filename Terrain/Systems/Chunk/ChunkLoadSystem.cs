@@ -5,6 +5,7 @@ using System;
 
 /// <summary>
 /// Tries to load chunk data from .seg files on disk.
+/// Uses FaceIndex from ChunkInfo to resolve the correct face storage path.
 ///
 /// Pipeline: runs independently and only marks loaded chunks as data-ready.
 ///
@@ -37,9 +38,6 @@ public class ChunkLoadSystem : QuerySystem<ChunkInfo>
     {
         if (Viewer == null || SegmentCreator == null) return;
 
-        string facePath = SegmentCreator.FaceStoragePath;
-        if (string.IsNullOrEmpty(facePath)) return;
-
         var commandBuffer = CommandBuffer;
 
         (int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(
@@ -68,6 +66,15 @@ public class ChunkLoadSystem : QuerySystem<ChunkInfo>
 
             try
             {
+                // Use FaceIndex to get the correct face storage path
+                string facePath = SegmentCreator.GetFaceStoragePath(info.FaceIndex);
+                if (string.IsNullOrEmpty(facePath))
+                {
+                    commandBuffer.RemoveTag<ChunkNeedsLoad>(entityId);
+                    commandBuffer.AddTag<ChunkPending>(entityId);
+                    continue;
+                }
+
                 string segPath = SegmentFile.GetSegmentFilePath(facePath, info.X, info.Z);
                 var (localX, localZ) = SegmentFile.ChunkToLocal(info.X, info.Z);
 
@@ -87,7 +94,7 @@ public class ChunkLoadSystem : QuerySystem<ChunkInfo>
             }
             catch (Exception ex)
             {
-                GD.PrintErr($"[ChunkLoadSystem] Error loading chunk ({info.X},{info.Z}): {ex.Message}");
+                GD.PrintErr($"[ChunkLoadSystem] Error loading chunk ({info.X},{info.Z}) face {info.FaceIndex}: {ex.Message}");
                 commandBuffer.RemoveTag<ChunkNeedsLoad>(entityId);
                 commandBuffer.AddTag<ChunkPending>(entityId);
             }

@@ -8,6 +8,9 @@ public class SystemCelestialCreator : BaseSystem
 {
 	private EntityStore _store;
 
+	/// <summary>Number of segments along one side of each face (1, 3, 5...). Must be odd.</summary>
+	public int SegmentsPerSide { get; set; } = 1;
+
 	protected override void OnAddStore(EntityStore store)
 	{
 		_store = store;
@@ -55,9 +58,10 @@ public class SystemCelestialCreator : BaseSystem
 				Type = CelestialType.Planet
 			});
 			
+			float radius = ConstantsCelestial.ComputeRadius(SegmentsPerSide);
 			celestial.AddComponent(new CelestialGeometry
 			{
-				Radius = ConstantsCelestial.BASE_RADIUS
+				Radius = radius
 			});
 			
 			celestial.AddComponent(new CelestialTransform
@@ -104,39 +108,39 @@ public class SystemCelestialCreator : BaseSystem
 
 		Vector3[] localNormals = new Vector3[]
 		{
-			Vector3.Up,       
-			Vector3.Down,     
-			Vector3.Right,    
-			Vector3.Left,     
-			Vector3.Forward,  
-			Vector3.Back      
+			Vector3.Forward,  // 0: Front (face_0 — боковая грань, чтобы XZ координаты работали)
+			Vector3.Right,    // 1: Right
+			Vector3.Back,     // 2: Back
+			Vector3.Left,     // 3: Left
+			Vector3.Up,       // 4: Top
+			Vector3.Down      // 5: Bottom
 		};
 
 
 		Vector3[] localPositions = new Vector3[]
 		{
-			new Vector3(0, radius, 0),     
-			new Vector3(0, -radius, 0),    
-			new Vector3(radius, 0, 0),     
-			new Vector3(-radius, 0, 0),    
-			new Vector3(0, 0, radius),     
-			new Vector3(0, 0, -radius)     
+			new Vector3(0, 0, radius),      // 0: Front
+			new Vector3(radius, 0, 0),      // 1: Right
+			new Vector3(0, 0, -radius),     // 2: Back
+			new Vector3(-radius, 0, 0),     // 3: Left
+			new Vector3(0, radius, 0),      // 4: Top
+			new Vector3(0, -radius, 0)      // 5: Bottom
 		};
 
 
 		Vector3[] localUpVectors = new Vector3[]
 		{
-			Vector3.Forward,  
-			Vector3.Forward,  
-			Vector3.Up,       
-			Vector3.Up,       
-			Vector3.Up,       
-			Vector3.Up        
+			Vector3.Up,       // 0: Front — Forward × Up = Right ✓
+			Vector3.Up,       // 1: Right — Right × Up = Back
+			Vector3.Up,       // 2: Back — Back × Up = Left
+			Vector3.Up,       // 3: Left — Left × Up = Forward
+			Vector3.Back,     // 4: Top — Up × Back = Right ✓
+			Vector3.Back      // 5: Bottom — Down × Back = Right ✓
 		};
 
 		string[] faceNames = new string[]
 		{
-			"Top", "Bottom", "Right", "Left", "Front", "Back"
+			"Front", "Right", "Back", "Left", "Top", "Bottom"
 		};
 
 		for (int i = 0; i < ConstantsCelestial.FACE_COUNT; i++)
@@ -165,11 +169,14 @@ public class SystemCelestialCreator : BaseSystem
 		if (!DirAccess.DirExistsAbsolute(absFacePath))
 			_CreateFaceFolder(celestialPath);
 
-		Vector3 worldRight = worldUp.Cross(worldNormal).Normalized();
+		// Right = Normal × Up gives the correct tangent direction for the face.
+		// This ensures the face's local X axis points in the right direction
+		// for the cube→sphere projection.
+		Vector3 worldRight = worldNormal.Cross(worldUp).Normalized();
 
 		Entity face = _store.CreateEntity(new UniqueEntity($"{celestial.Id}_Face_{faceIndex}"));
 		
-		face.AddComponent(new FaceIdentity { Index = faceIndex });
+		face.AddComponent(new FaceIdentity { Index = faceIndex, SegmentsPerSide = SegmentsPerSide });
 		face.AddComponent(new FaceName { Value = faceName });
 		face.AddComponent(new FacePosition { WorldPosition = worldPosition });
 		face.AddComponent(new FaceOrientation 

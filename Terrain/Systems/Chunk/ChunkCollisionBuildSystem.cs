@@ -6,6 +6,8 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Builds chunk collision from the same grid triangulation as ChunkMeshBuildSystem.
+/// Supports spherical (cube→sphere) projection with tangent correction.
+/// Supports all 6 faces via FaceIndex from ChunkInfo.
 /// </summary>
 public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 {
@@ -19,6 +21,12 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 	public int MaxPerFrame { get; set; } = 4;
 	public Node ParentNode { get; set; }
 	public Node3D Viewer { get; set; }
+
+	/// <summary>Reference to segment creator for face resolution and orientation.</summary>
+	public SystemSegmentCreator SegmentCreator { get; set; }
+
+	/// <summary>Planet radius for spherical projection.</summary>
+	public float PlanetRadius { get; set; } = 1000f;
 
 	public ChunkCollisionBuildSystem()
 		=> Filter.AllTags(Tags.Get<NeedsCollision, ChunkComplete>())
@@ -97,7 +105,21 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				ref var info = ref entity.GetComponent<ChunkInfo>();
 				ref var terrain = ref entity.GetComponent<ChunkTerrain>();
 
-				StaticBody3D body = BuildCollisionBody(terrain.Data, info);
+				// Use FaceIndex to get the correct face orientation
+				FaceOrientation? faceOrientation = SegmentCreator?.GetFaceOrientation(info.FaceIndex);
+				int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
+
+				StaticBody3D body;
+				if (faceOrientation.HasValue)
+				{
+					FaceOrientation orientation = faceOrientation.Value;
+					body = BuildSphericalCollisionBody(terrain.Data, ref info, ref orientation, segmentsPerSide);
+				}
+				else
+				{
+					body = BuildCollisionBody(terrain.Data, info);
+				}
+
 				if (body != null)
 					buffer.AddComponent(entityId, new ChunkCollider { BodyId = body.GetInstanceId() });
 			}
@@ -123,18 +145,52 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		CollisionShape3D collisionShape = new CollisionShape3D
 		{
 			Shape = shape,
-			Name = $"Collision_{info.X}_{info.Z}"
+			Name = $"Collision_{info.X}_{info.Z}_F{info.FaceIndex}"
 		};
 
 		StaticBody3D body = new StaticBody3D
 		{
-			Name = $"ChunkBody_{info.X}_{info.Z}",
+			Name = $"ChunkBody_{info.X}_{info.Z}_F{info.FaceIndex}",
 			CollisionLayer = 1,
 			CollisionMask = 1,
 			Position = new Vector3(
 				info.X * ChunkConstants.CHUNK_WORLD_SIZE,
 				0,
 				info.Z * ChunkConstants.CHUNK_WORLD_SIZE)
+		};
+
+		body.AddChild(collisionShape);
+		ParentNode.AddChild(body);
+		return body;
+	}
+
+	/// <summary>
+	/// Builds collision body with spherical (cube→sphere) projection.
+	/// </summary>
+	private StaticBody3D BuildSphericalCollisionBody(byte[] data, ref ChunkInfo info, ref FaceOrientation orientation, int segmentsPerSide)
+	{
+		if (data == null || data.Length < ChunkConstants.CHUNK_DATA_SIZE)
+			return null;
+
+		List<Vector3> faces = BuildSphericalFaces(data, ref info, ref orientation, segmentsPerSide, PlanetRadius);
+		if (faces.Count == 0)
+			return null;
+
+		ConcavePolygonShape3D shape = new ConcavePolygonShape3D();
+		shape.SetFaces(faces.ToArray());
+
+		CollisionShape3D collisionShape = new CollisionShape3D
+		{
+			Shape = shape,
+			Name = $"Collision_{info.X}_{info.Z}_F{info.FaceIndex}"
+		};
+
+		StaticBody3D body = new StaticBody3D
+		{
+			Name = $"ChunkBody_{info.X}_{info.Z}_F{info.FaceIndex}",
+			CollisionLayer = 1,
+			CollisionMask = 1,
+			Position = Vector3.Zero // Spherical: position is baked into vertex coordinates
 		};
 
 		body.AddChild(collisionShape);
@@ -163,6 +219,46 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				Vector3 ne = new Vector3((x + 1) * step, hNE * heightStep, z * step);
 				Vector3 sw = new Vector3(x * step, hSW * heightStep, (z + 1) * step);
 				Vector3 se = new Vector3((x + 1) * step, hSE * heightStep, (z + 1) * step);
+
+				AddFace(faces, nw, ne, se);
+				AddFace(faces, nw, se, sw);
+			}
+		}
+
+		return faces;
+	}
+
+	/// <summary>
+	/// Builds collision faces with spherical (cube→sphere) projection.
+	/// </summary>
+	private static List<Vector3> BuildSphericalFaces(byte[] data, ref ChunkInfo info, ref FaceOrientation orientation, int segmentsPerSide, float radius)
+	{
+		int size = ChunkConstants.CHUNK_SIZE;
+		float heightStep = ChunkConstants.TILE_HEIGHT;
+		int faceResolution = CubeSphereProjection.GetFaceResolution(segmentsPerSide);
+
+		List<Vector3> faces = new List<Vector3>(size * size * 6);
+
+		for (int z = 0; z < size; z++)
+		{
+			for (int x = 0; x < size; x++)
+			{
+				int hNW = GetHeight(data, x, z);
+				int hNE = GetHeight(data, x + 1, z);
+				int hSW = GetHeight(data, x, z + 1);
+				int hSE = GetHeight(data, x + 1, z + 1);
+
+				// Compute global vertex coordinates on the face
+				var (gxNW, gzNW) = CubeSphereProjection.GetGlobalVertexCoords(info.X, info.Z, x, z, segmentsPerSide);
+				var (gxNE, gzNE) = CubeSphereProjection.GetGlobalVertexCoords(info.X, info.Z, x + 1, z, segmentsPerSide);
+				var (gxSW, gzSW) = CubeSphereProjection.GetGlobalVertexCoords(info.X, info.Z, x, z + 1, segmentsPerSide);
+				var (gxSE, gzSE) = CubeSphereProjection.GetGlobalVertexCoords(info.X, info.Z, x + 1, z + 1, segmentsPerSide);
+
+				// Project onto sphere with height offset
+				Vector3 nw = CubeSphereProjection.GetSpherePointWithHeight(gxNW, gzNW, faceResolution, orientation, radius, hNW * heightStep);
+				Vector3 ne = CubeSphereProjection.GetSpherePointWithHeight(gxNE, gzNE, faceResolution, orientation, radius, hNE * heightStep);
+				Vector3 sw = CubeSphereProjection.GetSpherePointWithHeight(gxSW, gzSW, faceResolution, orientation, radius, hSW * heightStep);
+				Vector3 se = CubeSphereProjection.GetSpherePointWithHeight(gxSE, gzSE, faceResolution, orientation, radius, hSE * heightStep);
 
 				AddFace(faces, nw, ne, se);
 				AddFace(faces, nw, se, sw);

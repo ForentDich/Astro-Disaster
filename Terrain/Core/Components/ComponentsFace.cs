@@ -4,6 +4,8 @@ using Godot;
 public struct FaceIdentity : IComponent
 {
     public int Index;           
+    /// <summary>Number of segments along one side of this face (1, 3, 5...). Always odd so there's a center segment.</summary>
+    public int SegmentsPerSide;
 }
 
 public struct FaceName : IComponent

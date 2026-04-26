@@ -34,6 +34,10 @@ public partial class GameSession : Node
 	[Export] public string WorldName { get; set; } = "MyWorld";
 	[Export] public int WorldSeed { get; set; } = 12345;
 
+	[ExportGroup("Face")]
+	[Export(PropertyHint.Range, "1,15,2")]
+	public int SegmentsPerFace { get; set; } = 1;
+
 	public static GameSession Instance { get; private set; }
 	public EntityStore Store => _store;
 
@@ -121,7 +125,10 @@ public partial class GameSession : Node
 			CreateOnStart = true
 		};
 
-		var celestialCreator = new SystemCelestialCreator();
+		var celestialCreator = new SystemCelestialCreator
+		{
+			SegmentsPerSide = SegmentsPerFace
+		};
 
 		_segmentCreator = new SystemSegmentCreator
 		{
@@ -145,7 +152,8 @@ public partial class GameSession : Node
 			Viewer = Viewer,
 			RenderDistance = RenderDistance,
 			CollisionDistance = CollisionDistance,
-			MaxPerFrame = MaxCreatePerFrame
+			MaxPerFrame = MaxCreatePerFrame,
+			SegmentCreator = _segmentCreator
 		};
 
 		var removalSystem = new ChunkRemovalSystem
@@ -170,19 +178,25 @@ public partial class GameSession : Node
 			SeaLevelHeight = seaLevelHeight
 		};
 
+		float planetRadius = ConstantsCelestial.ComputeRadius(SegmentsPerFace);
+
 		_meshBuildSystem = new ChunkMeshBuildSystem
 		{
 			Viewer = Viewer,
 			MaxPerFrame = MaxMeshBuildPerFrame,
 			TerrainMaterial = TerrainMaterial,
-			ParentNode = this
+			ParentNode = this,
+			SegmentCreator = _segmentCreator,
+			PlanetRadius = planetRadius
 		};
 
 		_collisionBuildSystem = new ChunkCollisionBuildSystem
 		{
 			Viewer = Viewer,
 			MaxPerFrame = MaxCollisionBuildPerFrame,
-			ParentNode = this
+			ParentNode = this,
+			SegmentCreator = _segmentCreator,
+			PlanetRadius = planetRadius
 		};
 
 		_systems = new SystemRoot(_store)

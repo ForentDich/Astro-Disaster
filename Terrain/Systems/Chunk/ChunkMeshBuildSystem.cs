@@ -5,7 +5,9 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Builds chunk mesh from grid-cell heights without tile type mapping.
+/// Builds chunk mesh from grid-cell heights with spherical (cube→sphere) projection.
+/// Uses tangent (S2) method for uniform spherical distribution.
+/// Supports all 6 faces via FaceIndex from ChunkInfo.
 /// </summary>
 public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 {
@@ -20,6 +22,15 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 	public int MaxPerFrame { get; set; } = 2;
 	public Node ParentNode { get; set; }
 	public Node3D Viewer { get; set; }
+
+	/// <summary>Reference to segment creator for face resolution and orientation.</summary>
+	public SystemSegmentCreator SegmentCreator { get; set; }
+
+	/// <summary>Planet radius for spherical projection.</summary>
+	public float PlanetRadius { get; set; } = 1000f;
+
+	/// <summary>Height scale multiplier for terrain elevation.</summary>
+	public float HeightScale { get; set; } = 1.73f;
 
 	public ChunkMeshBuildSystem()
 		=> Filter.AllTags(Tags.Get<ChunkDataReady>())
@@ -78,7 +89,21 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				ref var info = ref entity.GetComponent<ChunkInfo>();
 				ref var terrain = ref entity.GetComponent<ChunkTerrain>();
 
-				Mesh mesh = BuildGridMesh(terrain.Data);
+				// Use FaceIndex to get the correct face orientation
+				FaceOrientation? faceOrientation = SegmentCreator?.GetFaceOrientation(info.FaceIndex);
+				int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
+
+				Mesh mesh;
+				if (faceOrientation.HasValue)
+				{
+					FaceOrientation orientation = faceOrientation.Value;
+					mesh = BuildSphericalGridMesh(terrain.Data, ref info, ref orientation, segmentsPerSide);
+				}
+				else
+				{
+					mesh = BuildGridMesh(terrain.Data);
+				}
+
 				if (mesh == null)
 					continue;
 
@@ -88,11 +113,8 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 					if (existing != null)
 					{
 						existing.Mesh = mesh;
-						existing.Name = $"Chunk_{info.X}_{info.Z}";
-						existing.Position = new Vector3(
-							info.X * ChunkConstants.CHUNK_WORLD_SIZE,
-							0,
-							info.Z * ChunkConstants.CHUNK_WORLD_SIZE);
+						existing.Name = $"Chunk_{info.X}_{info.Z}_F{info.FaceIndex}";
+						existing.Position = Vector3.Zero; // Spherical: position is baked into vertices
 					}
 					else
 					{
@@ -126,6 +148,9 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		}
 	}
 
+	/// <summary>
+	/// Builds a flat (non-spherical) grid mesh — fallback when no face orientation is available.
+	/// </summary>
 	private Mesh BuildGridMesh(byte[] data)
 	{
 		if (data == null || data.Length < ChunkConstants.CHUNK_DATA_SIZE)
@@ -137,7 +162,6 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 
 		SurfaceTool st = new SurfaceTool();
 		st.Begin(Mesh.PrimitiveType.Triangles);
-		// Disable vertex normal smoothing to keep hard low-poly facets.
 		st.SetSmoothGroup(uint.MaxValue);
 
 		for (int z = 0; z < size; z++)
@@ -156,6 +180,67 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				Vector3 ne = new Vector3((x + 1) * step, hNE * heightStep, z * step);
 				Vector3 sw = new Vector3(x * step, hSW * heightStep, (z + 1) * step);
 				Vector3 se = new Vector3((x + 1) * step, hSE * heightStep, (z + 1) * step);
+				Vector2 uvNW = new Vector2(0f, 0f);
+				Vector2 uvNE = new Vector2(1f, 0f);
+				Vector2 uvSW = new Vector2(0f, 1f);
+				Vector2 uvSE = new Vector2(1f, 1f);
+
+				AddTriangle(st, nw, ne, se, uvNW, uvNE, uvSE, surfaceId, color);
+				AddTriangle(st, nw, se, sw, uvNW, uvSE, uvSW, surfaceId, color);
+			}
+		}
+
+		ArrayMesh mesh = st.Commit();
+		if (mesh == null || mesh.GetSurfaceCount() == 0)
+			return null;
+
+		Material material = TerrainMaterial ?? GetFallbackMaterial();
+		if (material != null)
+			mesh.SurfaceSetMaterial(0, material);
+
+		return mesh;
+	}
+
+	/// <summary>
+	/// Builds a spherical grid mesh using cube→sphere projection with tangent correction.
+	/// </summary>
+	private Mesh BuildSphericalGridMesh(byte[] data, ref ChunkInfo info, ref FaceOrientation orientation, int segmentsPerSide)
+	{
+		if (data == null || data.Length < ChunkConstants.CHUNK_DATA_SIZE)
+			return null;
+
+		int size = ChunkConstants.CHUNK_SIZE;
+		float heightStep = ChunkConstants.TILE_HEIGHT;
+		int faceResolution = CubeSphereProjection.GetFaceResolution(segmentsPerSide);
+
+		SurfaceTool st = new SurfaceTool();
+		st.Begin(Mesh.PrimitiveType.Triangles);
+		st.SetSmoothGroup(uint.MaxValue);
+
+		for (int z = 0; z < size; z++)
+		{
+			for (int x = 0; x < size; x++)
+			{
+				int hNW = GetHeight(data, x, z);
+				int hNE = GetHeight(data, x + 1, z);
+				int hSW = GetHeight(data, x, z + 1);
+				int hSE = GetHeight(data, x + 1, z + 1);
+
+				byte surfaceId = GetSurface(data, x, z);
+				Color color = GetSurfaceColor(surfaceId);
+
+				// Compute global vertex coordinates on the face
+				var (gxNW, gzNW) = CubeSphereProjection.GetGlobalVertexCoords(info.X, info.Z, x, z, segmentsPerSide);
+				var (gxNE, gzNE) = CubeSphereProjection.GetGlobalVertexCoords(info.X, info.Z, x + 1, z, segmentsPerSide);
+				var (gxSW, gzSW) = CubeSphereProjection.GetGlobalVertexCoords(info.X, info.Z, x, z + 1, segmentsPerSide);
+				var (gxSE, gzSE) = CubeSphereProjection.GetGlobalVertexCoords(info.X, info.Z, x + 1, z + 1, segmentsPerSide);
+
+				// Project onto sphere with height offset
+				Vector3 nw = CubeSphereProjection.GetSpherePointWithHeight(gxNW, gzNW, faceResolution, orientation, PlanetRadius, hNW * heightStep);
+				Vector3 ne = CubeSphereProjection.GetSpherePointWithHeight(gxNE, gzNE, faceResolution, orientation, PlanetRadius, hNE * heightStep);
+				Vector3 sw = CubeSphereProjection.GetSpherePointWithHeight(gxSW, gzSW, faceResolution, orientation, PlanetRadius, hSW * heightStep);
+				Vector3 se = CubeSphereProjection.GetSpherePointWithHeight(gxSE, gzSE, faceResolution, orientation, PlanetRadius, hSE * heightStep);
+
 				Vector2 uvNW = new Vector2(0f, 0f);
 				Vector2 uvNE = new Vector2(1f, 0f);
 				Vector2 uvSW = new Vector2(0f, 1f);
@@ -260,11 +345,8 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		MeshInstance3D meshInstance = new MeshInstance3D
 		{
 			Mesh = mesh,
-			Name = $"Chunk_{info.X}_{info.Z}",
-			Position = new Vector3(
-				info.X * ChunkConstants.CHUNK_WORLD_SIZE,
-				0,
-				info.Z * ChunkConstants.CHUNK_WORLD_SIZE)
+			Name = $"Chunk_{info.X}_{info.Z}_F{info.FaceIndex}",
+			Position = Vector3.Zero // Spherical: position is baked into vertex coordinates
 		};
 
 		ParentNode.AddChild(meshInstance);
