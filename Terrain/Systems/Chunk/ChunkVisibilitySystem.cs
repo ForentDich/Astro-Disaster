@@ -6,7 +6,8 @@ using System.Collections.Generic;
 
 /// <summary>
 /// Manages chunk visibility around the viewer on ALL 6 faces.
-/// Uses raw XZ world coordinates for chunk positioning on each face.
+/// For each face, converts the viewer's world position to face-local UV coordinates
+/// to determine which chunks should be visible on that face.
 /// </summary>
 public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 {
@@ -18,56 +19,41 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 	private int _createIndex;
 
 	private Vector3 _lastViewerPos;
-	private (int x, int z) _lastChunkPos;
 	private bool _initialized;
 	private EntityStore _store;
-	
+
+	/// <summary>Per-face last chunk center positions.</summary>
+	private readonly Dictionary<int, (int x, int z)> _lastFaceChunkPos = new();
+
 	public Node3D Viewer { get; set; }
 	public int RenderDistance { get; set; } = 5;
 	public int CollisionDistance { get; set; } = 1;
 	public int MaxPerFrame { get; set; } = 8;
+	public float PlanetRadius { get; set; } = 1000f;
 
 	public SystemSegmentCreator SegmentCreator { get; set; }
-	
+
 	protected override void OnAddStore(EntityStore store)
 	{
 		_store = store;
 	}
-	
+
 	protected override void OnUpdate()
 	{
 		if (Viewer == null) return;
 
-		// Use raw XZ world coordinates for chunk positioning
-		(int currentX, int currentZ) = GetChunkCoords();
+		Vector3 viewerPos = Viewer.GlobalPosition;
+		bool playerMoved = !_initialized ||
+						  _lastViewerPos.DistanceSquaredTo(viewerPos) > 1.0f;
 
-		int prevX = _lastChunkPos.x;
-		int prevZ = _lastChunkPos.z;
-		
-		bool playerMoved = !_initialized || 
-						  currentX != _lastChunkPos.x || 
-						  currentZ != _lastChunkPos.z ||
-						  _lastViewerPos.DistanceSquaredTo(Viewer.GlobalPosition) > 1.0f;
-		
 		if (playerMoved)
 		{
-			int dx = _initialized ? (currentX - prevX) : 0;
-			int dz = _initialized ? (currentZ - prevZ) : 0;
-
-			_lastViewerPos = Viewer.GlobalPosition;
-			_lastChunkPos = (currentX, currentZ);
+			_lastViewerPos = viewerPos;
 			_initialized = true;
 
-			if (_visible.Count != 0 && Math.Abs(dx) <= 1 && Math.Abs(dz) <= 1 && (dx != 0 || dz != 0))
-			{
-				ShiftVisibleAndQueue(prevX, prevZ, currentX, currentZ, dx, dz);
-			}
-			else
-			{
-				RecalculateVisibleAndQueue(currentX, currentZ);
-			}
+			RecalculateVisibleAndQueue(viewerPos);
 		}
-		
+
 		var buffer = CommandBuffer;
 		ProcessChunkCreation(buffer);
 		RemoveOldChunks(buffer);
@@ -75,17 +61,32 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 	}
 
 	/// <summary>
-	/// Gets chunk coordinates from raw XZ world position.
+	/// Gets chunk coordinates for a specific face by converting world position
+	/// to face-local UV coordinates.
 	/// </summary>
-	private (int x, int z) GetChunkCoords()
+	private (int x, int z) GetFaceChunkCoords(Vector3 worldPos, int faceIndex)
 	{
-		return (
-			Mathf.FloorToInt(Viewer.GlobalPosition.X / ChunkConstants.CHUNK_WORLD_SIZE),
-			Mathf.FloorToInt(Viewer.GlobalPosition.Z / ChunkConstants.CHUNK_WORLD_SIZE)
-		);
+		FaceOrientation? orientation = SegmentCreator?.GetFaceOrientation(faceIndex);
+		if (orientation == null)
+			return (0, 0);
+
+		FaceOrientation ori = orientation.Value;
+
+		// Convert world position to face-local UV coordinates
+		Vector2 faceUV = CubeSphereProjection.WorldToFaceUV(worldPos, ori, PlanetRadius);
+
+		// Convert UV to face grid coordinates (in chunk units)
+		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
+		var (gridX, gridZ) = CubeSphereProjection.UVToFaceGrid(faceUV, segmentsPerSide);
+
+		// Convert to chunk coordinates
+		int chunkX = Mathf.FloorToInt(gridX);
+		int chunkZ = Mathf.FloorToInt(gridZ);
+
+		return (chunkX, chunkZ);
 	}
-	
-	private void RecalculateVisibleAndQueue(int centerX, int centerZ)
+
+	private void RecalculateVisibleAndQueue(Vector3 viewerPos)
 	{
 		_visible.Clear();
 		_createQueue.Clear();
@@ -93,6 +94,9 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 
 		for (int faceIndex = 0; faceIndex < ConstantsCelestial.FACE_COUNT; faceIndex++)
 		{
+			var (centerX, centerZ) = GetFaceChunkCoords(viewerPos, faceIndex);
+			_lastFaceChunkPos[faceIndex] = (centerX, centerZ);
+
 			for (int r = 0; r <= RenderDistance; r++)
 			{
 				if (r == 0)
@@ -117,38 +121,6 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 					AddVisibleAndMaybeQueue(minX, z, faceIndex);
 					AddVisibleAndMaybeQueue(maxX, z, faceIndex);
 				}
-			}
-		}
-	}
-
-	private void ShiftVisibleAndQueue(int oldCenterX, int oldCenterZ, int newCenterX, int newCenterZ, int dx, int dz)
-	{
-		int r = RenderDistance;
-
-		for (int faceIndex = 0; faceIndex < ConstantsCelestial.FACE_COUNT; faceIndex++)
-		{
-			if (dx != 0)
-			{
-				int sign = Math.Sign(dx);
-				int addX = newCenterX + sign * r;
-				for (int z = newCenterZ - r; z <= newCenterZ + r; z++)
-					AddVisibleAndMaybeQueue(addX, z, faceIndex);
-
-				int removeX = oldCenterX - sign * r;
-				for (int z = oldCenterZ - r; z <= oldCenterZ + r; z++)
-					_visible.Remove((removeX, z, faceIndex));
-			}
-
-			if (dz != 0)
-			{
-				int sign = Math.Sign(dz);
-				int addZ = newCenterZ + sign * r;
-				for (int x = newCenterX - r; x <= newCenterX + r; x++)
-					AddVisibleAndMaybeQueue(x, addZ, faceIndex);
-
-				int removeZ = oldCenterZ - sign * r;
-				for (int x = oldCenterX - r; x <= oldCenterX + r; x++)
-					_visible.Remove((x, removeZ, faceIndex));
 			}
 		}
 	}
@@ -187,7 +159,7 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 		if (!_activeChunks.ContainsKey(key))
 			_createQueue.Add((x, z, faceIndex));
 	}
-	
+
 	private void ProcessChunkCreation(CommandBuffer buffer)
 	{
 		if (_createIndex >= _createQueue.Count) return;
@@ -215,49 +187,52 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 			_createIndex = 0;
 		}
 	}
-	
+
 	private void CreateChunk(int x, int z, int faceIndex, CommandBuffer buffer)
 	{
 		int entityId = buffer.CreateEntity();
 
 		var (segX, segZ) = SegmentFile.ChunkToSegment(x, z);
 
-		buffer.AddComponent(entityId, new ChunkInfo 
-		{ 
-			X = x, 
-			Z = z, 
-			LOD = CalculateLOD(x, z),
+		buffer.AddComponent(entityId, new ChunkInfo
+		{
+			X = x,
+			Z = z,
+			LOD = CalculateLOD(x, z, faceIndex),
 			SegmentX = segX,
 			SegmentY = segZ,
 			FaceIndex = faceIndex
 		});
-		
+
 		buffer.AddTag<ChunkNeedsLoad>(entityId);
-		
+
 		_activeChunks[(x, z, faceIndex)] = entityId;
-		
-		if (ShouldHaveCollision(x, z))
+
+		if (ShouldHaveCollision(x, z, faceIndex))
 		{
 			buffer.AddTag<NeedsCollision>(entityId);
 		}
 	}
-	
-	private byte CalculateLOD(int chunkX, int chunkZ)
+
+	private byte CalculateLOD(int chunkX, int chunkZ, int faceIndex)
 	{
-		int dx = Math.Abs(chunkX - _lastChunkPos.x);
-		int dz = Math.Abs(chunkZ - _lastChunkPos.z);
+		if (!_lastFaceChunkPos.TryGetValue(faceIndex, out var center))
+			return 0;
+
+		int dx = Math.Abs(chunkX - center.x);
+		int dz = Math.Abs(chunkZ - center.z);
 		int distance = Math.Max(dx, dz);
-		
+
 		if (distance <= 2) return 0;
 		if (distance <= 4) return 1;
 		if (distance <= 6) return 2;
 		return 3;
 	}
-	
+
 	private void RemoveOldChunks(CommandBuffer buffer)
 	{
 		_toRemove.Clear();
-		
+
 		foreach (var kvp in _activeChunks)
 		{
 			if (!_visible.Contains(kvp.Key))
@@ -265,7 +240,7 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 				_toRemove.Add(kvp.Key);
 			}
 		}
-		
+
 		foreach (var pos in _toRemove)
 		{
 			if (_activeChunks.TryGetValue(pos, out int entityId))
@@ -275,21 +250,21 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 			}
 		}
 	}
-	
+
 	private void UpdateChunkCollisions(CommandBuffer buffer)
 	{
 		foreach (var kvp in _activeChunks)
 		{
 			var (x, z, faceIndex) = kvp.Key;
 			int entityId = kvp.Value;
-			
-			bool shouldCollide = ShouldHaveCollision(x, z);
-			
+
+			bool shouldCollide = ShouldHaveCollision(x, z, faceIndex);
+
 			if (!_store.TryGetEntityById(entityId, out var entity) || entity.IsNull)
 				continue;
-			
+
 			bool hasCollision = entity.Tags.Has<NeedsCollision>();
-			
+
 			if (shouldCollide && !hasCollision)
 			{
 				buffer.AddTag<NeedsCollision>(entityId);
@@ -300,10 +275,13 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 			}
 		}
 	}
-	
-	private bool ShouldHaveCollision(int chunkX, int chunkZ)
+
+	private bool ShouldHaveCollision(int chunkX, int chunkZ, int faceIndex)
 	{
-		return Math.Abs(chunkX - _lastChunkPos.x) <= CollisionDistance && 
-			   Math.Abs(chunkZ - _lastChunkPos.z) <= CollisionDistance;
+		if (!_lastFaceChunkPos.TryGetValue(faceIndex, out var center))
+			return false;
+
+		return Math.Abs(chunkX - center.x) <= CollisionDistance &&
+			   Math.Abs(chunkZ - center.z) <= CollisionDistance;
 	}
 }

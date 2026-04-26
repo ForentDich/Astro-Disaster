@@ -130,11 +130,14 @@ public partial class GameSession : Node
 			SegmentsPerSide = SegmentsPerFace
 		};
 
+		float planetRadius = ConstantsCelestial.ComputeRadius(SegmentsPerFace);
+
 		_segmentCreator = new SystemSegmentCreator
 		{
 			Viewer = Viewer,
 			LoadRadius = ConstantsSegment.LOAD_RADIUS,
-			UnloadRadius = ConstantsSegment.UNLOAD_RADIUS
+			UnloadRadius = ConstantsSegment.UNLOAD_RADIUS,
+			PlanetRadius = planetRadius
 		};
 
 		int seaLevelHeight = ComputeSeaLevelHeight();
@@ -153,7 +156,8 @@ public partial class GameSession : Node
 			RenderDistance = RenderDistance,
 			CollisionDistance = CollisionDistance,
 			MaxPerFrame = MaxCreatePerFrame,
-			SegmentCreator = _segmentCreator
+			SegmentCreator = _segmentCreator,
+			PlanetRadius = planetRadius
 		};
 
 		var removalSystem = new ChunkRemovalSystem
@@ -177,8 +181,6 @@ public partial class GameSession : Node
 			SegmentCreator = _segmentCreator,
 			SeaLevelHeight = seaLevelHeight
 		};
-
-		float planetRadius = ConstantsCelestial.ComputeRadius(SegmentsPerFace);
 
 		_meshBuildSystem = new ChunkMeshBuildSystem
 		{

@@ -16,14 +16,10 @@
 shader = ExtResource("13_2cqfq")
 shader_parameter/sun_direction = Vector3(0.865, 1.34, 1.46)
 shader_parameter/sun_color = Color(0.99999994, 0.9884406, 0.9369151, 1)
-shader_parameter/sun_angular_radius = 0.015
-shader_parameter/sun_glow = 0.902000042845
-shader_parameter/sky_top = Color(0.18, 0.34, 0.78, 1)
-shader_parameter/sky_horizon = Color(0.55, 0.75, 0.95, 1)
-shader_parameter/ground_color = Color(0.65124995, 0.80620724, 0.9633667, 1)
-shader_parameter/horizon_sharpness = 4.0
-shader_parameter/sunset_color = Color(1, 0.45, 0.15, 1)
-shader_parameter/sunset_strength = 1.0
+shader_parameter/sun_angular_radius = 0.045000002137489996
+shader_parameter/sun_glow = 1.0
+shader_parameter/star_density = 454.038016816805
+shader_parameter/star_threshold = 0.9990000474525
 
 [sub_resource type="Sky" id="Sky_074og"]
 sky_material = SubResource("ShaderMaterial_yaehf")

@@ -22,6 +22,7 @@ public class SystemSegmentCreator : BaseSystem
     public Node3D Viewer { get; set; }
     public int LoadRadius { get; set; } = ConstantsSegment.LOAD_RADIUS;
     public int UnloadRadius { get; set; } = ConstantsSegment.UNLOAD_RADIUS;
+    public float PlanetRadius { get; set; } = 1000f;
 
     // ── Internal state ──
     private EntityStore _store;
@@ -71,7 +72,8 @@ public class SystemSegmentCreator : BaseSystem
         // Step 1 — resolve all faces (once)
         if (_faceData.Count == 0)
         {
-            if (!TryResolveAllFaces())
+            TryResolveAllFaces();
+            if (_faceData.Count == 0)
                 return;
         }
 
@@ -81,7 +83,7 @@ public class SystemSegmentCreator : BaseSystem
 
     // ────────────────────── Face resolution ──────────────────────
 
-    private bool TryResolveAllFaces()
+    private void TryResolveAllFaces()
     {
         var query = _store.Query().AllTags(Tags.Get<FaceCreated>());
 
@@ -103,13 +105,6 @@ public class SystemSegmentCreator : BaseSystem
 
             _faceData[index] = data;
 
-            // Transition tag
-            if (entity.Tags.Has<FaceNeedsSegments>())
-            {
-                entity.RemoveTag<FaceNeedsSegments>();
-                entity.AddTag<FaceHasSegments>();
-            }
-
             count++;
             GD.Print($"[SegmentCreator] Registered face {index}: {entity.GetComponent<FaceName>().Value}");
         }
@@ -123,10 +118,7 @@ public class SystemSegmentCreator : BaseSystem
                 break;
             }
             GD.Print($"[SegmentCreator] Registered {count} faces (segments per side: {_segmentsPerSide})");
-            return true;
         }
-
-        return false;
     }
 
     /// <summary>
@@ -169,17 +161,25 @@ public class SystemSegmentCreator : BaseSystem
 
     private void UpdateSegmentsAroundViewer()
     {
-        var (segX, segZ) = SegmentFile.WorldToSegment(Viewer.GlobalPosition);
-
-        // Clamp viewer segment position to face bounds
+        Vector3 viewerPos = Viewer.GlobalPosition;
         int half = SegmentGridHalf;
-        segX = Math.Clamp(segX, -half, half);
-        segZ = Math.Clamp(segZ, -half, half);
 
         foreach (var kvp in _faceData)
         {
             int faceIndex = kvp.Key;
             var data = kvp.Value;
+
+            // Convert world position to face-local UV coordinates
+            Vector2 faceUV = CubeSphereProjection.WorldToFaceUV(viewerPos, data.Orientation, PlanetRadius);
+            var (gridX, gridZ) = CubeSphereProjection.UVToFaceGrid(faceUV, _segmentsPerSide);
+
+            // Convert to segment coordinates
+            int segX = Mathf.FloorToInt(gridX / ConstantsSegment.SIDE);
+            int segZ = Mathf.FloorToInt(gridZ / ConstantsSegment.SIDE);
+
+            // Clamp viewer segment position to face bounds
+            segX = Math.Clamp(segX, -half, half);
+            segZ = Math.Clamp(segZ, -half, half);
 
             UpdateSegmentsForFace(data, faceIndex, segX, segZ);
         }
