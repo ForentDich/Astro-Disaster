@@ -6,6 +6,7 @@ using System;
 /// <summary>
 /// Generates full segment data and writes all chunk payloads to one .seg file.
 /// Data layout per chunk: 33x33 heights + 32x32 surface bytes.
+/// Uses 3D noise sampled at sphere positions for seamless spherical terrain.
 /// </summary>
 public class SegmentDataGenerationSystem : QuerySystem<SegmentIdentity, SegmentStorage>
 {
@@ -17,6 +18,9 @@ public class SegmentDataGenerationSystem : QuerySystem<SegmentIdentity, SegmentS
     public float HeightScale { get; set; } = 0.25f;
     public int SeaLevelHeight { get; set; }
     public int MaxPerFrame { get; set; } = 1;
+
+    /// <summary>Reference to segment creator for resolving face orientation.</summary>
+    public SystemSegmentCreator SegmentCreator { get; set; }
 
     public SegmentDataGenerationSystem()
         => Filter.AllTags(Tags.Get<SegmentNeedsGenerate>());
@@ -52,7 +56,7 @@ public class SegmentDataGenerationSystem : QuerySystem<SegmentIdentity, SegmentS
                 ref var identity = ref entity.GetComponent<SegmentIdentity>();
                 ref var storage = ref entity.GetComponent<SegmentStorage>();
 
-                GenerateFullSegment(identity.GridPosition, storage.FilePath);
+                GenerateFullSegment(ref identity, storage.FilePath);
 
                 buffer.RemoveTag<SegmentNeedsGenerate>(entity.Id);
                 buffer.AddTag<SegmentDataReady>(entity.Id);
@@ -77,11 +81,10 @@ public class SegmentDataGenerationSystem : QuerySystem<SegmentIdentity, SegmentS
         _noiseGenerator ??= new NoiseGenerator(NoiseSettings);
     }
 
-    private void GenerateFullSegment(Vector2I segmentGrid, string segmentFilePath)
+    private void GenerateFullSegment(ref SegmentIdentity identity, string segmentFilePath)
     {
         const int side = ConstantsSegment.SIDE;
         const int chunkSize = ChunkConstants.CHUNK_SIZE;
-        const int tileSize = ChunkConstants.TILE_SIZE;
 
         int segmentCells = side * chunkSize;
         int hmSize = segmentCells + 1;
@@ -91,20 +94,43 @@ public class SegmentDataGenerationSystem : QuerySystem<SegmentIdentity, SegmentS
         byte[] zones = new byte[total];
         byte[] erosions = new byte[total];
 
-        int worldOffsetX = segmentGrid.X * side * chunkSize * tileSize;
-        int worldOffsetZ = segmentGrid.Y * side * chunkSize * tileSize;
+        // Get face orientation from the segment creator
+        int faceIndex = identity.FaceIndex;
+        FaceOrientation orientation = default;
+        int segmentsPerSide = 1;
 
-        _noiseGenerator.GenerateHeightmap(
+        if (SegmentCreator != null)
+        {
+            var faceOrientation = SegmentCreator.GetFaceOrientation(faceIndex);
+            if (faceOrientation.HasValue)
+            {
+                orientation = faceOrientation.Value;
+            }
+            segmentsPerSide = SegmentCreator.SegmentsPerSide;
+        }
+
+        int faceResolution = CubeSphereProjection.GetFaceResolution(segmentsPerSide);
+        float planetRadius = ConstantsCelestial.ComputeRadius(segmentsPerSide);
+
+        // Compute chunk offset in face-local coordinates
+        // segmentGrid is in segment units, convert to chunk units
+        int chunkOffsetX = identity.GridPosition.X * side * chunkSize;
+        int chunkOffsetZ = identity.GridPosition.Y * side * chunkSize;
+
+        _noiseGenerator.GenerateHeightmap3D(
             heights.AsSpan(),
             zones.AsSpan(),
             erosions.AsSpan(),
-            worldOffsetX,
-            worldOffsetZ,
+            faceResolution,
+            orientation,
+            planetRadius,
+            chunkOffsetX,
+            chunkOffsetZ,
             hmSize,
             hmSize,
             ConstantsCelestial.MAX_HEIGHT,
             HeightScale,
-            tileSize
+            1
         );
 
         byte[][] allChunks = new byte[ConstantsSegment.TOTAL_CHUNKS][];

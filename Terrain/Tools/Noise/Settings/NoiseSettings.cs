@@ -9,16 +9,16 @@ public partial class NoiseSettings : Resource
     [ExportCategory("Континентальность")]
     [Export] public FastNoiseLite.NoiseTypeEnum NoiseType { get; set; } = FastNoiseLite.NoiseTypeEnum.SimplexSmooth;
 
-    /// <summary>Частота шума континентальности. 0.0003 ≈ 3-5 континентов.</summary>
-    [Export(PropertyHint.Range, "0.0001,0.01,0.0001")]
-    public float Frequency { get; set; } = 0.0003f;
+    /// <summary>Частота шума континентальности. Масштаб в мировых единицах (тайлы).</summary>
+    [Export(PropertyHint.Range, "0.001,20.0,0.001")]
+    public float Frequency { get; set; } = 2.0f;
 
     // ═══════════════════ Детали рельефа ═══════════════════
     [ExportCategory("Детали рельефа")]
 
-    /// <summary>Частота деталей (холмы). Работает только на суше.</summary>
-    [Export(PropertyHint.Range, "0.001,0.1,0.001")]
-    public float DetailFrequency { get; set; } = 0.005f;
+    /// <summary>Частота деталей (холмы). Масштаб в мировых единицах (тайлы).</summary>
+    [Export(PropertyHint.Range, "0.001,50.0,0.001")]
+    public float DetailFrequency { get; set; } = 5.0f;
 
     /// <summary>Сила деталей: 0 = плоско, 0.15 = холмы, 0.3 = горы.</summary>
     [Export(PropertyHint.Range, "0.0,0.5,0.01")]
@@ -27,16 +27,16 @@ public partial class NoiseSettings : Resource
     // ═══════════════════ Эрозия (E) ═══════════════════
     [ExportCategory("Эрозия")]
 
-    /// <summary>Частота шума эрозии. Меньше = крупнее зоны.</summary>
-    [Export(PropertyHint.Range, "0.0001,0.01,0.0001")]
-    public float ErosionFrequency { get; set; } = 0.0006f;
+    /// <summary>Частота шума эрозии. Масштаб в мировых единицах (тайлы).</summary>
+    [Export(PropertyHint.Range, "0.001,20.0,0.001")]
+    public float ErosionFrequency { get; set; } = 3.0f;
 
     // ═══════════════════ Реки (Weirdness / PV) ═══════════════════
     [ExportCategory("Реки")]
 
-    /// <summary>Частота шума Weirdness (реки). Меньше = длиннее извилины.</summary>
-    [Export(PropertyHint.Range, "0.0001,0.01,0.0001")]
-    public float RiverFrequency { get; set; } = 0.0004f;
+    /// <summary>Частота шума Weirdness (реки). Масштаб в мировых единицах (тайлы).</summary>
+    [Export(PropertyHint.Range, "0.001,20.0,0.001")]
+    public float RiverFrequency { get; set; } = 4.0f;
 
     /// <summary>Ширина речной долины. Больше = шире реки (0..1).</summary>
     [Export(PropertyHint.Range, "0.0,0.3,0.01")]
@@ -56,9 +56,9 @@ public partial class NoiseSettings : Resource
     [Export(PropertyHint.Range, "0,200,1")]
     public float DomainWarpAmplitude { get; set; } = 60f;
 
-    /// <summary>Частота warp-шума. Меньше = крупнее волны искажения.</summary>
-    [Export(PropertyHint.Range, "0.0001,0.01,0.0001")]
-    public float DomainWarpFrequency { get; set; } = 0.0004f;
+    /// <summary>Частота warp-шума. Масштаб в мировых единицах (тайлы).</summary>
+    [Export(PropertyHint.Range, "0.001,20.0,0.001")]
+    public float DomainWarpFrequency { get; set; } = 2.0f;
 
     // ═══════════════════ Фрактал ═══════════════════
     [ExportCategory("Фрактал")]

@@ -119,9 +119,9 @@ public class SystemCelestialCreator : BaseSystem
 
 		Vector3[] localPositions = new Vector3[]
 		{
-			new Vector3(0, 0, radius),      // 0: Front
+			new Vector3(0, 0, -radius),     // 0: Front
 			new Vector3(radius, 0, 0),      // 1: Right
-			new Vector3(0, 0, -radius),     // 2: Back
+			new Vector3(0, 0, radius),      // 2: Back
 			new Vector3(-radius, 0, 0),     // 3: Left
 			new Vector3(0, radius, 0),      // 4: Top
 			new Vector3(0, -radius, 0)      // 5: Bottom

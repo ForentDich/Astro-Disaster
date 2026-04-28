@@ -118,6 +118,10 @@ public class NoiseGenerator
         _coastLevel = _settings.ContinentCurve.Sample(_settings.CoastStart);
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    //  2D Noise (legacy — flat terrain, not used for spherical planets)
+    // ═══════════════════════════════════════════════════════════════
+
     /// <summary>
     /// Raw continentalness value at (x, y): 0..1.
     /// Low = ocean, high = deep inland. Domain warp is applied internally.
@@ -153,22 +157,6 @@ public class NoiseGenerator
 
     /// <summary>
     /// Final height at (x, y): 0..1.
-    ///
-    /// Формула:
-    ///   potential = ContinentCurve(C)         — потенциальная высота
-    ///   seaLevel = ContinentCurve(CoastStart) — уровень моря (кэш)
-    ///   landRise = potential - seaLevel        — подъём над морем
-    ///   factor   = ErosionCurve(E)             — сколько потенциала реализовано
-    ///
-    ///   Океан (C < Coast):  height = potential  (E не влияет)
-    ///   Суша  (C ≥ Coast):  height = seaLevel + landRise × factor
-    ///                              + detail × DetailStrength × factor × coastMask
-    ///
-    ///   Реки (PV в зоне Valleys на суше): height проваливается ниже seaLevel
-    ///
-    /// Результат:
-    ///   C↑ E↓ → Горы | C↑ E↑ → Плато | C→ E↓ → Холмы | C↓ → Океан
-    ///   PV↓ на суше → Реки/озёра
     /// </summary>
     public float GetNoise(float x, float y)
     {
@@ -177,12 +165,58 @@ public class NoiseGenerator
         return GetNoiseFromCE(C, E, x, y);
     }
 
+    // ═══════════════════════════════════════════════════════════════
+    //  3D Noise (spherical planet — uses position on sphere surface)
+    // ═══════════════════════════════════════════════════════════════
+
+    /// <summary>
+    /// 3D continentalness at world position (x, y, z).
+    /// Uses the 3D noise function with the position on the sphere surface.
+    /// The position is in world units (tile-scaled) for consistent tuning with 2D.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public float GetContinentalness3D(float x, float y, float z)
+    {
+        return (_continentNoise.GetNoise3D(x, y, z) + 1f) * 0.5f;
+    }
+
+    /// <summary>
+    /// 3D erosion at world position (x, y, z).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public float GetErosion3D(float x, float y, float z)
+    {
+        return (_erosionNoise.GetNoise3D(x, y, z) + 1f) * 0.5f;
+    }
+
+    /// <summary>
+    /// 3D Peaks & Valleys from Weirdness noise.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public float GetRiverPV3D(float x, float y, float z)
+    {
+        float W = _riverNoise.GetNoise3D(x, y, z);
+        return 1f - Mathf.Abs(3f * Mathf.Abs(W) - 2f);
+    }
+
+    /// <summary>
+    /// Final height at 3D world position (x, y, z): 0..1.
+    /// Uses the same C/E/River logic as 2D, but with 3D noise inputs.
+    /// </summary>
+    public float GetNoise3D(float x, float y, float z)
+    {
+        float C = GetContinentalness3D(x, y, z);
+        float E = GetErosion3D(x, y, z);
+        return GetNoiseFromCE(C, E, x, y, z);
+    }
+
     /// <summary>
     /// seaLevel + landRise × ErosionCurve(E) + detail × factor × coastMask.
     /// + River carving via PV valleys (Minecraft-style ridges folded).
+    /// 3D version — uses 3D detail noise.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private float GetNoiseFromCE(float C, float E, float x, float y)
+    private float GetNoiseFromCE(float C, float E, float x, float y, float z)
     {
         float potential = _settings.ContinentCurve.Sample(C);
 
@@ -201,42 +235,29 @@ public class NoiseGenerator
         }
 
         // Detail: микро-текстура, масштабируется фактором эрозии
-        // Горы → текстурные гребни, равнины → гладкие
         float coastMask = Smoothstep(_settings.CoastStart, _settings.InlandStart, C);
         float erosionFactor = _settings.ErosionCurve.Sample(E);
-        float detail = _detailNoise.GetNoise2D(x, y)
+        float detail = _detailNoise.GetNoise3D(x, y, z)
                      * _settings.DetailStrength * erosionFactor * coastMask;
 
         float result = baseHeight + detail;
 
         // ═══════ Реки: PV-складка (Minecraft-style) ═══════
-        //
-        // Ключевой принцип: реки текут по НИЗИНАМ, не через горы.
-        // Вместо хака по erosion, маскируем по фактической высоте terrain
-        // над уровнем моря. Чем выше terrain — тем слабее река.
-        //
-        // Это физически корректно: вода не может подняться выше
-        // уровня моря, реки всегда стекают вниз.
         float riverExtendC = _settings.CoastStart - 0.08f;
 
         if (C >= _settings.CoastStart)
         {
-            // Суша: не проваливаться ниже уровня моря (базовое правило)
             result = Mathf.Max(result, _coastLevel);
         }
 
         if (_settings.RiversEnabled && C >= riverExtendC)
         {
-            float PV = GetRiverPV(x, y); // −1..+1
+            float PV = GetRiverPV3D(x, y, z);
             float valleyThreshold = -1f + _settings.RiverWidth;
             float bankZone = valleyThreshold + _settings.RiverWidth * 0.5f;
 
             if (PV < bankZone)
             {
-                // Маска по высоте: реки возможны только вблизи уровня моря.
-                // aboveSea ≈ 0.02 (равнины) → mask ≈ 1.0 → полная река
-                // aboveSea ≈ 0.10 (холмы)   → mask ≈ 0.0 → нет реки
-                // aboveSea ≈ 0.30 (горы)     → mask = 0.0 → чистые горы
                 float aboveSea = result - _coastLevel;
                 float maxRiverableHeight = 0.07f;
                 float heightMask = 1f - Smoothstep(0f, maxRiverableHeight, aboveSea);
@@ -248,9 +269,8 @@ public class NoiseGenerator
 
                     if (PV < valleyThreshold)
                     {
-                        // Внутри русла: t=1 в центре (PV=−1), t=0 на краю
                         float t = (valleyThreshold - PV) / (valleyThreshold + 1f);
-                        t = t * t; // квадратичный профиль
+                        t = t * t;
 
                         if (C >= _settings.CoastStart)
                         {
@@ -259,7 +279,6 @@ public class NoiseGenerator
                         }
                         else
                         {
-                            // Побережье: река сливается с океаном
                             float coastBlend = Smoothstep(riverExtendC, _settings.CoastStart, C);
                             float riverHeight = Mathf.Lerp(_coastLevel, riverBottom, t);
                             result = Mathf.Lerp(result, riverHeight, coastBlend);
@@ -267,7 +286,6 @@ public class NoiseGenerator
                     }
                     else
                     {
-                        // Банки (PV между valleyThreshold и bankZone)
                         float blend = Smoothstep(bankZone, valleyThreshold, PV) * heightMask;
                         result = Mathf.Lerp(preRiverResult, _coastLevel, blend);
                     }
@@ -300,24 +318,23 @@ public class NoiseGenerator
 
     /// <summary>
     /// Zone with river detection: if PV is in valley range on land → River zone.
-    /// Suppresses rivers in high terrain (mountains, hills) — rivers only on lowlands.
+    /// 3D version.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ContinentalZone GetZoneWithRiver(float C, float E, float x, float y)
+    public ContinentalZone GetZoneWithRiver3D(float C, float E, float x, float y, float z)
     {
         if (C < _settings.CoastStart)      return ContinentalZone.Ocean;
         if (C < _settings.InlandStart)      return ContinentalZone.Coast;
 
         if (_settings.RiversEnabled)
         {
-            // Only mark as river if terrain is low enough for rivers to form
-            float height = GetNoiseFromCE(C, E, x, y);
+            float height = GetNoiseFromCE(C, E, x, y, z);
             float aboveSea = height - _coastLevel;
             float maxRiverableHeight = 0.07f;
 
             if (aboveSea < maxRiverableHeight)
             {
-                float PV = GetRiverPV(x, y);
+                float PV = GetRiverPV3D(x, y, z);
                 float valleyThreshold = -1f + _settings.RiverWidth;
                 float bankZone = valleyThreshold + _settings.RiverWidth * 0.5f;
                 if (PV < bankZone)
@@ -341,10 +358,7 @@ public class NoiseGenerator
     }
 
     /// <summary>
-    /// Generates heightmap + continental zone per point.
-    /// Zone is a separate concept from biome:
-    ///   Zone  = terrain shape  (from C noise)
-    ///   Biome = surface type   (from zone + temperature + humidity — later)
+    /// Generates heightmap + continental zone per point using 2D noise.
     /// </summary>
     public void GenerateHeightmap(
         Span<int>  output,
@@ -372,7 +386,7 @@ public class NoiseGenerator
                 int   heightValue = Mathf.RoundToInt(noiseValue * heightScale * maxHeight);
 
                 int idx = z * width + x;
-                output[idx] = heightValue; // Убрали скалярный Clamp для SIMD-прохода
+                output[idx] = heightValue;
                 
                 if (writeZone)    zoneOutput[idx]    = (byte)GetZoneWithRiver(C, E, worldX, worldZ);
                 if (writeErosion) erosionOutput[idx] = (byte)(Mathf.Clamp(E, 0f, 1f) * 255f);
@@ -384,6 +398,193 @@ public class NoiseGenerator
 
         // 2. Градиентный Clamp (с частичным разворачиванием)
         ClampGradient(output, width, height, MAX_GRADIENT);
+    }
+
+    /// <summary>
+    /// Generates heightmap using 3D noise for spherical terrain.
+    /// For each point on the face grid, computes the 3D world position on the sphere
+    /// and samples 3D noise at that position.
+    /// </summary>
+    /// <param name="output">Heightmap output (int heights).</param>
+    /// <param name="zoneOutput">Zone output (byte per point).</param>
+    /// <param name="erosionOutput">Erosion output (byte per point).</param>
+    /// <param name="faceResolution">Total vertex resolution of the face.</param>
+    /// <param name="orientation">Face orientation (Normal, Up, Right).</param>
+    /// <param name="planetRadius">Planet radius.</param>
+    /// <param name="chunkOffsetX">Chunk X offset on the face (in chunk units).</param>
+    /// <param name="chunkOffsetZ">Chunk Z offset on the face (in chunk units).</param>
+    /// <param name="width">Width of the output grid (in vertices).</param>
+    /// <param name="height">Height of the output grid (in vertices).</param>
+    /// <param name="maxHeight">Maximum quantized height.</param>
+    /// <param name="heightScale">Height scale multiplier.</param>
+    /// <param name="step">Step between vertices (in tile units).</param>
+    public void GenerateHeightmap3D(
+        Span<int>  output,
+        Span<byte> zoneOutput,
+        Span<byte> erosionOutput,
+        int faceResolution,
+        FaceOrientation orientation,
+        float planetRadius,
+        int chunkOffsetX, int chunkOffsetZ,
+        int width, int height,
+        int maxHeight,
+        float heightScale,
+        int step = 1)
+    {
+        bool writeZone    = zoneOutput.Length    >= output.Length;
+        bool writeErosion = erosionOutput.Length >= output.Length;
+
+        // Sample 3D noise at the sphere surface position.
+        // Use face-global tile coordinates (same basis as mesh/collision) so noise scale
+        // matches the 2D world-unit tuning and stays tile-consistent across faces.
+        int chunksPerSide = faceResolution / ChunkConstants.CHUNK_SIZE;
+        int halfChunks = chunksPerSide / 2;
+        int baseX = chunkOffsetX + halfChunks * ChunkConstants.CHUNK_SIZE;
+        int baseZ = chunkOffsetZ + halfChunks * ChunkConstants.CHUNK_SIZE;
+        int stepTiles = Math.Max(1, step);
+
+        for (int z = 0; z < height; z++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                // Compute global vertex coordinates on the face
+                int globalX = baseX + x * stepTiles;
+                int globalZ = baseZ + z * stepTiles;
+
+                // Get sphere position (at base radius, no height offset)
+                Godot.Vector3 spherePos = CubeSphereProjection.GetSpherePoint(
+                    globalX, globalZ,
+                    faceResolution,
+                    orientation,
+                    planetRadius);
+
+                // Normalize to unit sphere for seamless 3D noise across all 6 faces
+                float wx = spherePos.X;
+                float wy = spherePos.Y;
+                float wz = spherePos.Z;
+
+                float C = GetContinentalness3D(wx, wy, wz);
+                float E = GetErosion3D(wx, wy, wz);
+                float noiseValue = GetNoiseFromCE(C, E, wx, wy, wz);
+                int   heightValue = Mathf.RoundToInt(noiseValue * heightScale * maxHeight);
+
+                int idx = z * width + x;
+                output[idx] = heightValue;
+                
+                if (writeZone)    zoneOutput[idx]    = (byte)GetZoneWithRiver3D(C, E, wx, wy, wz);
+                if (writeErosion) erosionOutput[idx] = (byte)(Mathf.Clamp(E, 0f, 1f) * 255f);
+            }
+        }
+
+    }
+
+    /// <summary>
+    /// Zone with river detection — 2D version (legacy).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ContinentalZone GetZoneWithRiver(float C, float E, float x, float y)
+    {
+        if (C < _settings.CoastStart)      return ContinentalZone.Ocean;
+        if (C < _settings.InlandStart)      return ContinentalZone.Coast;
+
+        if (_settings.RiversEnabled)
+        {
+            float height = GetNoiseFromCE(C, E, x, y);
+            float aboveSea = height - _coastLevel;
+            float maxRiverableHeight = 0.07f;
+
+            if (aboveSea < maxRiverableHeight)
+            {
+                float PV = GetRiverPV(x, y);
+                float valleyThreshold = -1f + _settings.RiverWidth;
+                float bankZone = valleyThreshold + _settings.RiverWidth * 0.5f;
+                if (PV < bankZone)
+                    return ContinentalZone.River;
+            }
+        }
+
+        if (C < _settings.FarInlandStart)   return ContinentalZone.Inland;
+        return ContinentalZone.FarInland;
+    }
+
+    /// <summary>
+    /// 2D version of GetNoiseFromCE (legacy, used by GetZoneWithRiver).
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private float GetNoiseFromCE(float C, float E, float x, float y)
+    {
+        float potential = _settings.ContinentCurve.Sample(C);
+
+        float baseHeight;
+        if (C < _settings.CoastStart)
+        {
+            baseHeight = potential;
+        }
+        else
+        {
+            float landRise = potential - _coastLevel;
+            float factor = _settings.ErosionCurve.Sample(E);
+            baseHeight = _coastLevel + landRise * factor;
+        }
+
+        float coastMask = Smoothstep(_settings.CoastStart, _settings.InlandStart, C);
+        float erosionFactor = _settings.ErosionCurve.Sample(E);
+        float detail = _detailNoise.GetNoise2D(x, y)
+                     * _settings.DetailStrength * erosionFactor * coastMask;
+
+        float result = baseHeight + detail;
+
+        float riverExtendC = _settings.CoastStart - 0.08f;
+
+        if (C >= _settings.CoastStart)
+        {
+            result = Mathf.Max(result, _coastLevel);
+        }
+
+        if (_settings.RiversEnabled && C >= riverExtendC)
+        {
+            float PV = GetRiverPV(x, y);
+            float valleyThreshold = -1f + _settings.RiverWidth;
+            float bankZone = valleyThreshold + _settings.RiverWidth * 0.5f;
+
+            if (PV < bankZone)
+            {
+                float aboveSea = result - _coastLevel;
+                float maxRiverableHeight = 0.07f;
+                float heightMask = 1f - Smoothstep(0f, maxRiverableHeight, aboveSea);
+
+                if (heightMask > 0.01f)
+                {
+                    float preRiverResult = result;
+                    float riverBottom = _coastLevel * (1f - _settings.RiverDepth);
+
+                    if (PV < valleyThreshold)
+                    {
+                        float t = (valleyThreshold - PV) / (valleyThreshold + 1f);
+                        t = t * t;
+
+                        if (C >= _settings.CoastStart)
+                        {
+                            float riverHeight = Mathf.Lerp(_coastLevel, riverBottom, t);
+                            result = Mathf.Lerp(preRiverResult, riverHeight, heightMask);
+                        }
+                        else
+                        {
+                            float coastBlend = Smoothstep(riverExtendC, _settings.CoastStart, C);
+                            float riverHeight = Mathf.Lerp(_coastLevel, riverBottom, t);
+                            result = Mathf.Lerp(result, riverHeight, coastBlend);
+                        }
+                    }
+                    else
+                    {
+                        float blend = Smoothstep(bankZone, valleyThreshold, PV) * heightMask;
+                        result = Mathf.Lerp(preRiverResult, _coastLevel, blend);
+                    }
+                }
+            }
+        }
+
+        return Mathf.Clamp(result, 0f, 1f);
     }
 
     /// <summary>

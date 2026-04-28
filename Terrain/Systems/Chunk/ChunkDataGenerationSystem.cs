@@ -134,20 +134,42 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 		byte[] zones = new byte[vertexCount];
 		byte[] erosions = new byte[vertexCount];
 
-		int worldOffsetX = info.X * chunkSize * ChunkConstants.TILE_SIZE;
-		int worldOffsetZ = info.Z * chunkSize * ChunkConstants.TILE_SIZE;
+		// Get face orientation for 3D noise sampling
+		FaceOrientation orientation = default;
+		int segmentsPerSide = 1;
 
-		_noiseGenerator.GenerateHeightmap(
+		if (SegmentCreator != null)
+		{
+			var faceOrientation = SegmentCreator.GetFaceOrientation(info.FaceIndex);
+			if (faceOrientation.HasValue)
+			{
+				orientation = faceOrientation.Value;
+			}
+			segmentsPerSide = SegmentCreator.SegmentsPerSide;
+		}
+
+		int faceResolution = CubeSphereProjection.GetFaceResolution(segmentsPerSide);
+		float planetRadius = ConstantsCelestial.ComputeRadius(segmentsPerSide);
+
+		// Compute chunk offset in face-local coordinates
+		// info.X and info.Z are in chunk units, convert to vertex indices
+		int chunkOffsetX = info.X * chunkSize;
+		int chunkOffsetZ = info.Z * chunkSize;
+
+		_noiseGenerator.GenerateHeightmap3D(
 			heights.AsSpan(),
 			zones.AsSpan(),
 			erosions.AsSpan(),
-			worldOffsetX,
-			worldOffsetZ,
+			faceResolution,
+			orientation,
+			planetRadius,
+			chunkOffsetX,
+			chunkOffsetZ,
 			vertexSize,
 			vertexSize,
 			maxHeight,
 			HeightScale,
-			ChunkConstants.TILE_SIZE
+			1
 		);
 
 		byte[] data = new byte[ChunkConstants.CHUNK_DATA_SIZE];

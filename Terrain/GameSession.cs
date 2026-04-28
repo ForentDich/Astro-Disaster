@@ -147,7 +147,8 @@ public partial class GameSession : Node
 			NoiseSettings = NoiseSettings,
 			HeightScale = HeightScale,
 			MaxPerFrame = 1,
-			SeaLevelHeight = seaLevelHeight
+			SeaLevelHeight = seaLevelHeight,
+			SegmentCreator = _segmentCreator
 		};
 
 		var visibilitySystem = new ChunkVisibilitySystem
@@ -266,8 +267,15 @@ public partial class GameSession : Node
 
 		if (noiseGen != null)
 		{
-			float c = noiseGen.GetContinentalness(pos.X, pos.Z);
-			float e = noiseGen.GetErosion(pos.X, pos.Z);
+			// Use 3D noise sampled at the viewer's position on the sphere
+			// Normalize to unit sphere for consistent noise sampling
+			float len = pos.Length();
+			float nx = len > 0.001f ? pos.X / len : 0f;
+			float ny = len > 0.001f ? pos.Y / len : 0f;
+			float nz = len > 0.001f ? pos.Z / len : 0f;
+
+			float c = noiseGen.GetContinentalness3D(nx, ny, nz);
+			float e = noiseGen.GetErosion3D(nx, ny, nz);
 			var zone = noiseGen.GetZone(c);
 
 			cValue = c.ToString("F3");
@@ -288,7 +296,7 @@ public partial class GameSession : Node
 		}
 
 		_biomeLabel.Text =
-			"Mode: Grid chunks\n" +
+			"Mode: 3D Noise (Spherical)\n" +
 			$"Зона: {zoneName} (C={cValue})\n" +
 			$"Эрозия: {eValue}\n" +
 			$"Биом: {biomeName}\n" +

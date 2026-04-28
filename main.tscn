@@ -16,7 +16,7 @@
 shader = ExtResource("13_2cqfq")
 shader_parameter/sun_direction = Vector3(0.865, 1.34, 1.46)
 shader_parameter/sun_color = Color(0.99999994, 0.9884406, 0.9369151, 1)
-shader_parameter/sun_angular_radius = 0.045000002137489996
+shader_parameter/sun_angular_radius = 0.04500000213748999
 shader_parameter/sun_glow = 1.0
 shader_parameter/star_density = 454.038016816805
 shader_parameter/star_threshold = 0.9990000474525
@@ -94,6 +94,7 @@ TexturePackDirectory = "res://Terrain/Textures/tiles/"
 WaterMaterial = SubResource("ShaderMaterial_074og")
 TrunkMaterial = SubResource("ShaderMaterial_efxa6")
 CanopyMaterial = SubResource("StandardMaterial3D_dg77c")
+SegmentsPerFace = 3
 
 [node name="WorldGameplay" type="Node3D" parent="." unique_id=880777964]
 script = ExtResource("7_5vw27")
@@ -116,7 +117,7 @@ Step = 30
 Mode = 1
 
 [node name="Player" parent="." unique_id=73761922 instance=ExtResource("9_kek77")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1000, 89.203)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2700, 89.203)
 script = ExtResource("9_4c57u")
 Speed = 15.0
 MaxFallSpeed = 18.0
