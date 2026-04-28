@@ -82,7 +82,7 @@ public class PlayerInputSystem : QuerySystem<PlayerVelocity>
             }
             else
             {
-                velocity.Direction = rawInput; // near-zero → stop
+                velocity.Direction = Vector3.Zero;
             }
 
             // ── Jump buffer (only outside noclip) ──

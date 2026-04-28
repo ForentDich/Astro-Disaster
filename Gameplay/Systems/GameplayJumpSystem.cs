@@ -26,7 +26,13 @@ public class GameplayJumpSystem : QuerySystem<PlayerJump, PlayerVelocity, GodotB
             if (jump.BufferTimer > 0 && body.IsOnFloor())
             {
                 var vel = velocity.Velocity;
-                vel.Y = jump.JumpForce;
+
+                // If linked to a planet, jump away from planet center (along UpDirection)
+                if (entity.HasComponent<GravityAffected>())
+                    vel += body.UpDirection * jump.JumpForce;
+                else
+                    vel.Y = jump.JumpForce;
+
                 velocity.Velocity = vel;
                 jump.BufferTimer = 0;
             }

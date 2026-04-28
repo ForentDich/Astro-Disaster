@@ -40,3 +40,19 @@ public struct PlayerRotation : IComponent
 {
     public float Speed;
 }
+
+public struct PlayerOrbitBoundary : IComponent
+{
+    public float LowOrbitHeightFactor;
+    public float BlendHeightFactor;
+    public float MinCornerSafeRadiusFactor;
+}
+
+public struct PlayerOrbitState : IComponent
+{
+    public float Altitude;
+    public float DistanceFromCenter;
+    public float BoundaryRadius;
+    public float AlignWeight;
+    public bool IsInSpace;
+}

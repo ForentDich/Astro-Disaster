@@ -14,6 +14,9 @@ public class GameplayEntityRotationSystem : QuerySystem<PlayerVelocity, GodotBod
 
         foreach (var entity in Query.Entities)
         {
+            // Skip if linked to a planet — GameplayPlanetAlignSystem handles rotation
+            if (entity.HasComponent<GravityAffected>()) continue;
+
             ref var velocity = ref entity.GetComponent<PlayerVelocity>();
             var body = entity.GetComponent<GodotBody>().GetBody();
             if (body == null) continue;

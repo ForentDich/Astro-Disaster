@@ -75,7 +75,17 @@ public class SystemCelestialCreator : BaseSystem
 			{
 				Gravity = 9.8f
 			});
-			
+
+			// GravitySource for KSP-style inverse-square gravity
+			// GM = surfaceGravity * radius²  (so at radius r, g = GM / r²)
+			float surfaceGravity = 9.8f;
+			celestial.AddComponent(new GravitySource
+			{
+				Center = Vector3.Zero,
+				Radius = radius,
+				GM = surfaceGravity * radius * radius
+			});
+
 			celestial.AddComponent(new CelestialParent { World = world });
 
 			celestial.AddTag<CelestialActive>();
