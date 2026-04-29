@@ -1,10 +1,10 @@
 
 using Friflo.Engine.ECS;
-using Friflo.Engine.ECS.Serialize;
 using Friflo.Engine.ECS.Systems;
 using Godot;
 using System;
 using System.IO;
+using System.Text.Json;
 
 public class SystemWorldCreator : BaseSystem
 {
@@ -74,7 +74,6 @@ public class SystemWorldCreator : BaseSystem
 
             if (!worldExists)
             {
-                world.AddTag<WorldNeedsSave>();
                 _CreateFolders(savePath);
                 _SaveMetadata(world, savePath);
                 GD.Print($"[ WorldCreator ] >> World '{WorldName}' created (new)");
@@ -131,30 +130,22 @@ public class SystemWorldCreator : BaseSystem
             version = 1
         };
 
-        GD.Print($"[WorldCreator] Metadata path: {metaPath}");
-    }
-
-    private void SaveStoreToJson(string savePath)
-    {
         try
         {
-            var serializer = new EntitySerializer();
+            string absolutePath = ProjectSettings.GlobalizePath(metaPath);
+            string dir = Path.GetDirectoryName(absolutePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
 
-            string jsonFilePath = $"{savePath}/entity-store.json";
-            string absolutePath = ProjectSettings.GlobalizePath(jsonFilePath);
-
-            GD.Print($"[WorldCreator] Saving store to JSON: {absolutePath}");
-
-            using (var writeStream = new FileStream(absolutePath, FileMode.Create))
+            string json = JsonSerializer.Serialize(meta, new JsonSerializerOptions
             {
-                serializer.WriteStore(_store, writeStream);
-                writeStream.Close();
-            }
+                WriteIndented = true
+            });
+            File.WriteAllText(absolutePath, json);
         }
         catch (Exception ex)
         {
-            GD.PrintErr($"[WorldCreator] Error saving to JSON: {ex.Message}");
-            GD.PrintErr($"[WorldCreator] StackTrace: {ex.StackTrace}");
+            GD.PrintErr($"[WorldCreator] Error saving metadata: {ex.Message}");
         }
     }
 }

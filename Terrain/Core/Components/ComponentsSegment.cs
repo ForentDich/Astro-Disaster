@@ -40,14 +40,6 @@ public struct SegmentTerrainStats : IComponent
     public bool HasCaves;
 }
 
-public struct SegmentStorage : IComponent
-{
-    public string FilePath;         
-    public ulong LastModified;      
-    public ulong FileSize;          
-}
-
-
 public struct SegmentPerformance : IComponent
 {
     public float DistanceToViewer;  

@@ -15,7 +15,6 @@ public struct ChunkTerrain : IComponent
 {
 	/// <summary>
 	/// Terrain payload: 33x33 vertex heights + 32x32 cell surfaces.
-	/// Persisted as-is to .seg files.
 	/// </summary>
 	public byte[] Data;
 }

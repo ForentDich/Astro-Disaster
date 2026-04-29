@@ -262,7 +262,7 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 			FaceIndex = faceIndex
 		});
 
-		buffer.AddTag<ChunkNeedsLoad>(entityId);
+		buffer.AddTag<ChunkPending>(entityId);
 
 		_activeChunks[(x, z, faceIndex)] = entityId;
 

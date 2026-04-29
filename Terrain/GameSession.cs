@@ -27,8 +27,6 @@ public partial class GameSession : Node
 	[Export] public Material TerrainMaterial { get; set; }
 	[Export] public string TexturePackDirectory { get; set; } = "";
 	[Export] public Material WaterMaterial { get; set; }
-	[Export] public Material TrunkMaterial { get; set; }
-	[Export] public Material CanopyMaterial { get; set; }
 
 	[ExportGroup("World")]
 	[Export] public string WorldName { get; set; } = "MyWorld";
@@ -44,7 +42,7 @@ public partial class GameSession : Node
 	private EntityStore _store;
 	private SystemRoot _systems;
 	private SystemSegmentCreator _segmentCreator;
-	private SegmentDataGenerationSystem _segmentDataGen;
+	private NoiseGenerator _noiseGenerator;
 	private ChunkDataGenerationSystem _chunkDataGen;
 	private ChunkMeshBuildSystem _meshBuildSystem;
 	private ChunkCollisionBuildSystem _collisionBuildSystem;
@@ -61,6 +59,8 @@ public partial class GameSession : Node
 			NoiseSettings = new NoiseSettings();
 			GD.Print("[TerrainWorld] Created default NoiseSettings");
 		}
+
+		_noiseGenerator = new NoiseGenerator(NoiseSettings);
 	}
 
 	private void SetupTerrain()
@@ -71,7 +71,6 @@ public partial class GameSession : Node
 
 		SurfaceRegistry.Load();
 		BiomeRegistry.Load();
-		TreeTypeRegistry.Load();
 	}
 
 	private void SetupTerrainMaterial()
@@ -142,15 +141,6 @@ public partial class GameSession : Node
 
 		int seaLevelHeight = ComputeSeaLevelHeight();
 
-		_segmentDataGen = new SegmentDataGenerationSystem
-		{
-			NoiseSettings = NoiseSettings,
-			HeightScale = HeightScale,
-			MaxPerFrame = 1,
-			SeaLevelHeight = seaLevelHeight,
-			SegmentCreator = _segmentCreator
-		};
-
 		var visibilitySystem = new ChunkVisibilitySystem
 		{
 			Viewer = Viewer,
@@ -164,13 +154,6 @@ public partial class GameSession : Node
 		var removalSystem = new ChunkRemovalSystem
 		{
 			MaxPerFrame = MaxRemovalPerFrame
-		};
-
-		var chunkLoadSystem = new ChunkLoadSystem
-		{
-			Viewer = Viewer,
-			MaxPerFrame = MaxDataGenPerFrame,
-			SegmentCreator = _segmentCreator
 		};
 
 		_chunkDataGen = new ChunkDataGenerationSystem
@@ -207,10 +190,8 @@ public partial class GameSession : Node
 			worldCreator,
 			celestialCreator,
 			_segmentCreator,
-			_segmentDataGen,
 			visibilitySystem,
 			removalSystem,
-			chunkLoadSystem,
 			_chunkDataGen,
 			_meshBuildSystem,
 			_collisionBuildSystem,
@@ -258,7 +239,7 @@ public partial class GameSession : Node
 		if (!_debugVisible || _biomeLabel == null || Viewer == null) return;
 
 		var pos = Viewer.GlobalPosition;
-		var noiseGen = _segmentDataGen?.NoiseGenerator;
+		var noiseGen = _noiseGenerator;
 
 		string zoneName = "N/A";
 		string cValue = "-";
@@ -320,15 +301,6 @@ public partial class GameSession : Node
 			{
 				collider.GetBody()?.QueueFree();
 				entity.RemoveComponent<ChunkCollider>();
-			}
-			if (entity.TryGetComponent<ChunkTreeMesh>(out var treeMesh) && treeMesh.InstanceIds != null)
-			{
-				foreach (ulong id in treeMesh.InstanceIds)
-				{
-					if (GodotObject.InstanceFromId(id) is Node node)
-						node.QueueFree();
-				}
-				entity.RemoveComponent<ChunkTreeMesh>();
 			}
 		}
 	}

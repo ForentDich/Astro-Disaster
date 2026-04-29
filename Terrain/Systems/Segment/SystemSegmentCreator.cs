@@ -3,7 +3,6 @@ using Friflo.Engine.ECS.Systems;
 using Godot;
 using System;
 using System.Collections.Generic;
-using System.IO;
 
 /// <summary>
 /// Creates and manages segment entities around the player on ALL 6 faces.
@@ -13,7 +12,7 @@ using System.IO;
 /// Responsibilities:
 ///   1. Track all 6 faces from the ECS store.
 ///   2. For each face, track the player's segment-grid position.
-///   3. Create segment entities (+ empty .seg files) within LoadRadius on each face.
+///   3. Create segment entities within LoadRadius on each face.
 ///   4. Mark far-away segments for unloading beyond UnloadRadius.
 /// </summary>
 public class SystemSegmentCreator : BaseSystem
@@ -238,9 +237,6 @@ public class SystemSegmentCreator : BaseSystem
         {
             ref var faceId = ref data.Face.GetComponent<FaceIdentity>();
 
-            string fileName = $"seg_{segX}_{segZ}{ConstantsSegment.FILE_EXTENSION}";
-            string filePath = Path.Combine(data.StoragePath, fileName);
-
             float worldX = segX * ConstantsSegment.WORLD_SIZE;
             float worldZ = segZ * ConstantsSegment.WORLD_SIZE;
             float half   = ConstantsSegment.WORLD_SIZE * 0.5f;
@@ -260,36 +256,12 @@ public class SystemSegmentCreator : BaseSystem
                 Size   = ConstantsSegment.WORLD_SIZE
             });
 
-            seg.AddComponent(new SegmentStorage
-            {
-                FilePath     = filePath,
-                LastModified = (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                FileSize     = 0
-            });
-
             seg.AddComponent(new SegmentParentFace { Face = data.Face });
-
-            // Decide: load existing data or generate fresh
-            string absPath = ProjectSettings.GlobalizePath(filePath);
-            bool fileExists = File.Exists(absPath);
-
-            if (fileExists)
-            {
-                seg.AddTag<SegmentNeedsLoad>();
-            }
-            else
-            {
-                SegmentFile.CreateEmpty(filePath);
-                seg.AddTag<SegmentNeedsGenerate>();
-            }
 
             seg.AddTag<SegmentActive>();
             data.ActiveSegments[(segX, segZ)] = seg.Id;
 
-            if (fileExists)
-                GD.Print($"[SegmentCreator] Face {faceIndex} segment ({segX},{segZ}) loaded (existing)");
-            else
-                GD.Print($"[SegmentCreator] Face {faceIndex} segment ({segX},{segZ}) created (new) → {fileName}");
+            GD.Print($"[SegmentCreator] Face {faceIndex} segment ({segX},{segZ}) created");
         }
         catch (Exception ex)
         {
@@ -306,9 +278,6 @@ public class SystemSegmentCreator : BaseSystem
 
         if (_store.TryGetEntityById(id, out var entity) && !entity.IsNull)
         {
-            if (entity.Tags.Has<SegmentDataDirty>())
-                entity.AddTag<SegmentNeedsSave>();
-
             entity.RemoveTag<SegmentActive>();
             entity.AddTag<SegmentInactive>();
         }
