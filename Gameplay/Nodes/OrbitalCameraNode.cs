@@ -32,27 +32,22 @@ public partial class OrbitalCameraNode : Camera3D
         var session = GameplaySession.Instance;
         if (session == null)
         {
-            GD.PrintErr("[OrbitalCameraNode] GameplaySession.Instance is null!");
             return;
         }
 
         if (PlayerNodePath == null || PlayerNodePath.IsEmpty)
         {
-            GD.PrintErr("[OrbitalCameraNode] PlayerNodePath is not set in the Inspector!");
             return;
         }
 
         var playerNode = GetNode<PlayerNode>(PlayerNodePath);
         if (playerNode == null)
         {
-            GD.PrintErr("[OrbitalCameraNode] PlayerNode not found at path: " + PlayerNodePath);
             return;
         }
 
         if (playerNode.Entity.IsNull)
         {
-            GD.PrintErr("[OrbitalCameraNode] PlayerNode entity not yet registered. " +
-                        "Ensure PlayerNode is above OrbitalCameraNode in the tree.");
             return;
         }
 

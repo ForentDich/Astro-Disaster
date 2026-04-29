@@ -17,10 +17,6 @@ public partial class PlayerNode : CharacterBody3D
     [Export] public float JumpForce         { get; set; } = 5.0f;
     [Export] public float JumpBufferDuration { get; set; } = 0.12f;
 
-    [ExportGroup("Noclip")]
-    [Export] public float NoclipSpeedMultiplier { get; set; } = 5.0f;
-    [Export] public float NoclipVerticalSpeed   { get; set; } = 10.0f;
-
     [ExportGroup("Rotation")]
     [Export] public float RotationSpeed { get; set; } = 12.0f;
 
@@ -39,8 +35,6 @@ public partial class PlayerNode : CharacterBody3D
         var session = GameplaySession.Instance;
         if (session == null)
         {
-            GD.PrintErr("[PlayerNode] GameplaySession.Instance is null! " +
-                        "Make sure GameplaySession is higher in the scene tree.");
             return;
         }
 
@@ -48,7 +42,6 @@ public partial class PlayerNode : CharacterBody3D
             this,
             Speed, GravityForce, MaxFallSpeed,
             JumpForce, JumpBufferDuration,
-            NoclipSpeedMultiplier, NoclipVerticalSpeed,
             RotationSpeed
         );
     }

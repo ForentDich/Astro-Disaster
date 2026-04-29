@@ -8,18 +8,11 @@ using Godot;
 /// </summary>
 public class GameplayOrbitBoundarySystem : QuerySystem<GravityAffected, GodotBody, PlayerOrbitBoundary, PlayerOrbitState>
 {
-    private bool _f4WasDown;
 
     public GameplayOrbitBoundarySystem() => Filter.AllTags(Tags.Get<PlayerTag>());
 
     protected override void OnUpdate()
     {
-        bool f4Down = Input.IsKeyPressed(Key.F4);
-        bool f4Pressed = f4Down && !_f4WasDown;
-        _f4WasDown = f4Down;
-
-        bool printed = false;
-
         foreach (var entity in Query.Entities)
         {
             ref var affected = ref entity.GetComponent<GravityAffected>();
@@ -62,17 +55,6 @@ public class GameplayOrbitBoundarySystem : QuerySystem<GravityAffected, GodotBod
 
             state.AlignWeight = alignWeight;
             state.IsInSpace = dist >= boundaryRadius;
-            state.DistanceFromCenter = dist;
-            state.Altitude = Mathf.Max(0f, dist - radius);
-            state.BoundaryRadius = boundaryRadius;
-
-            if (f4Pressed && !printed)
-            {
-                GD.Print(
-                    $"[Orbit] Alt={state.Altitude:0.0} Dist={dist:0.0} Boundary={boundaryRadius:0.0} " +
-                    $"Align={alignWeight:0.00} Space={(state.IsInSpace ? "yes" : "no")}");
-                printed = true;
-            }
         }
     }
 }

@@ -5,10 +5,9 @@ using Godot;
 /// <summary>
 /// Reads keyboard/gamepad input and sets PlayerVelocity.Direction
 /// relative to the orbital camera's yaw.
-/// Handles noclip toggle (V key) and jump buffer initiation.
 /// Mirrors: SystemsG/s_input_player.gd
 /// </summary>
-public class PlayerInputSystem : QuerySystem<PlayerVelocity>
+public class PlayerInputSystem : QuerySystem<PlayerVelocity, GodotBody>
 {
     /// <summary>Query to find the camera linked to the player.</summary>
     private ArchetypeQuery<CameraFollowsPlayer, OrbitalCameraData> _cameraQuery;
@@ -22,19 +21,35 @@ public class PlayerInputSystem : QuerySystem<PlayerVelocity>
 
     /// <summary>
     /// Finds the OrbitalCameraData for a camera that follows the given player entity.
-    /// Returns true if found, with yaw populated.
+    /// Returns true if found, with yaw and reference forward populated.
     /// </summary>
-    private bool TryCameraYaw(Entity playerEntity, out float yaw)
+    private bool TryCameraData(Entity playerEntity, out float yaw, out Vector3 referenceForward)
     {
         yaw = 0f;
+        referenceForward = Vector3.Zero;
         foreach (var entity in _cameraQuery.Entities)
         {
             var follow = entity.GetComponent<CameraFollowsPlayer>();
             if (follow.Target.Id != playerEntity.Id) continue;
-            yaw = entity.GetComponent<OrbitalCameraData>().Yaw;
+            var cam = entity.GetComponent<OrbitalCameraData>();
+            yaw = cam.Yaw;
+            referenceForward = cam.ReferenceForward;
             return true;
         }
         return false;
+    }
+
+    private static Vector3 GetStableTangent(Vector3 up, Vector3 preferred)
+    {
+        Vector3 tangent = preferred - up * preferred.Dot(up);
+        if (tangent.LengthSquared() < 0.0001f)
+        {
+            Vector3 axis = Mathf.Abs(up.Dot(Vector3.Up)) < 0.9f
+                ? Vector3.Up
+                : Vector3.Right;
+            tangent = axis - up * axis.Dot(up);
+        }
+        return tangent.Normalized();
     }
 
     protected override void OnUpdate()
@@ -42,41 +57,28 @@ public class PlayerInputSystem : QuerySystem<PlayerVelocity>
         foreach (var entity in Query.Entities)
         {
             ref var velocity = ref entity.GetComponent<PlayerVelocity>();
+            var body = entity.GetComponent<GodotBody>().GetBody();
+            if (body == null) continue;
 
-            var rawInput = Vector3.Zero;
+            Vector3 rawInput = Vector3.Zero;
             rawInput.Z = Input.GetAxis("move_forward", "move_backward");
             rawInput.X = Input.GetAxis("move_left", "move_right");
 
-            // ── Noclip toggle ──
-            bool isNoclip = false;
-            if (entity.HasComponent<PlayerNoclip>())
-            {
-                ref var noclip = ref entity.GetComponent<PlayerNoclip>();
-                if (Input.IsActionJustPressed("v"))
-                {
-                    noclip.IsActive = !noclip.IsActive;
-                    GD.Print("Noclip: ", noclip.IsActive ? "ON" : "OFF");
-                }
-                isNoclip = noclip.IsActive;
-
-                if (isNoclip)
-                {
-                    if (Input.IsActionPressed("jump"))        rawInput.Y =  25f;
-                    else if (Input.IsActionPressed("crouch")) rawInput.Y = -25f;
-                }
-            }
-
             // ── Camera-relative direction ──
-            if (rawInput.Length() > 0.1f && TryCameraYaw(entity, out float camYaw))
+            if (rawInput.Length() > 0.1f && TryCameraData(entity, out float camYaw, out Vector3 referenceForward))
             {
-                var cameraForward = (-Vector3.Forward).Rotated(Vector3.Up, camYaw);
-                var cameraRight   = Vector3.Right.Rotated(Vector3.Up, camYaw);
+                Vector3 up = body.UpDirection;
+                if (up.LengthSquared() < 0.001f) up = Vector3.Up;
 
-                var worldDir = cameraForward * rawInput.Z
-                             + cameraRight   * rawInput.X;
+                Vector3 baseForward = referenceForward.LengthSquared() < 0.001f
+                    ? GetStableTangent(up, Vector3.Forward)
+                    : GetStableTangent(up, referenceForward);
 
-                if (isNoclip)
-                    worldDir += Vector3.Up * rawInput.Y;
+                Vector3 cameraForward = baseForward.Rotated(up, camYaw);
+                cameraForward = -cameraForward;
+                Vector3 cameraRight = up.Cross(cameraForward).Normalized();
+                cameraForward = cameraRight.Cross(up).Normalized();
+                Vector3 worldDir = (cameraForward * rawInput.Z) + (cameraRight * rawInput.X);
 
                 velocity.Direction = worldDir.Normalized();
             }
@@ -85,9 +87,8 @@ public class PlayerInputSystem : QuerySystem<PlayerVelocity>
                 velocity.Direction = Vector3.Zero;
             }
 
-            // ── Jump buffer (only outside noclip) ──
-            if (Input.IsActionJustPressed("jump") && !isNoclip
-                && entity.HasComponent<PlayerJump>())
+
+            if (Input.IsActionJustPressed("jump") && entity.HasComponent<PlayerJump>())
             {
                 ref var jump = ref entity.GetComponent<PlayerJump>();
                 jump.BufferTimer = jump.BufferDuration;

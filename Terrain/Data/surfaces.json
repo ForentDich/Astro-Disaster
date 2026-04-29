@@ -1,9 +1,9 @@
 [
-    { "name": "Stone",      "tint": [0.7, 0.7, 0.7],  "slopeVariant": -1, "noiseStrength": 1.0,  "texture": "dev_grid_02.png",   "treeType": "None",  "treeDensity": 0.0  },
-    { "name": "Dirt",       "tint": [0.6, 0.45, 0.3], "slopeVariant": -1, "noiseStrength": 1.0,  "texture": "dev_grid_02.png",   "treeType": "None",  "treeDensity": 0.0  },
-    { "name": "Grass",      "tint": [0.5, 0.8, 0.3],  "slopeVariant":  1, "noiseStrength": 1.0,  "texture": "dev_grid_02.png",     "treeType": "Oak",   "treeDensity": 0.02 },
-    { "name": "Sand",       "tint": [1.0, 0.95, 0.8],  "slopeVariant": -1, "noiseStrength": 1.0,  "texture": "dev_grid_02.png",    "treeType": "None",  "treeDensity": 0.0  },
-    { "name": "Snow",       "tint": [1.0, 1.0, 1.0],  "slopeVariant":  -1, "noiseStrength": 0.2,  "texture": "dev_grid_02.png",            "treeType": "None",  "treeDensity": 0.0  },
-    { "name": "Gravel",     "tint": [0.5, 0.5, 0.55], "slopeVariant":  1, "noiseStrength": 1.0,  "texture": "dev_grid_02.png", "treeType": "None",  "treeDensity": 0.0  },
+    { "name": "Stone",      "tint": [0.7, 0.7, 0.7],  "slopeVariant": -1, "noiseStrength": 1.0,  "texture": "dev_grid_03.png",   "treeType": "None",  "treeDensity": 0.0  },
+    { "name": "Dirt",       "tint": [0.6, 0.45, 0.3], "slopeVariant": -1, "noiseStrength": 1.0,  "texture": "dev_grid_03.png",   "treeType": "None",  "treeDensity": 0.0  },
+    { "name": "Grass",      "tint": [0.5, 0.8, 0.3],  "slopeVariant":  1, "noiseStrength": 1.0,  "texture": "dev_grid_03.png",     "treeType": "Oak",   "treeDensity": 0.02 },
+    { "name": "Sand",       "tint": [1.0, 0.95, 0.8],  "slopeVariant": -1, "noiseStrength": 1.0,  "texture": "dev_grid_03.png",    "treeType": "None",  "treeDensity": 0.0  },
+    { "name": "Snow",       "tint": [1.0, 1.0, 1.0],  "slopeVariant":  -1, "noiseStrength": 0.2,  "texture": "dev_grid_03.png",            "treeType": "None",  "treeDensity": 0.0  },
+    { "name": "Gravel",     "tint": [0.5, 0.5, 0.55], "slopeVariant":  1, "noiseStrength": 1.0,  "texture": "dev_grid_03.png", "treeType": "None",  "treeDensity": 0.0  },
     { "name": "Water",      "tint": [0.2, 0.6, 1.0],  "slopeVariant": -1, "noiseStrength": 0.3,  "texture": "water_02.png","treeType": "None",  "treeDensity": 0.0  }
 ]

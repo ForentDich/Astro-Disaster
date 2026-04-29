@@ -10,7 +10,6 @@ public struct PlayerVelocity : IComponent
 
 public struct PlayerGravity : IComponent
 {
-    public Vector3 Direction;
     public float Force;
     public float MaxFallSpeed;
 }
@@ -22,23 +21,10 @@ public struct PlayerJump : IComponent
     public float BufferDuration;
 }
 
-public struct PlayerNoclip : IComponent
-{
-    public bool IsActive;
-    public float SpeedMultiplier;
-    public float VerticalSpeed;
-    public bool CanFlyThroughWalls;
-}
-
-public struct PlayerHealth : IComponent
-{
-    public float Current;
-    public float Maximum;
-}
-
 public struct PlayerRotation : IComponent
 {
     public float Speed;
+    public Vector3 Facing;
 }
 
 public struct PlayerOrbitBoundary : IComponent
@@ -50,9 +36,6 @@ public struct PlayerOrbitBoundary : IComponent
 
 public struct PlayerOrbitState : IComponent
 {
-    public float Altitude;
-    public float DistanceFromCenter;
-    public float BoundaryRadius;
     public float AlignWeight;
     public bool IsInSpace;
 }

@@ -11,6 +11,8 @@ public struct OrbitalCameraData : IComponent
     public float Sensitivity;
     public float Yaw;
     public float Pitch;
+    public Vector3 ReferenceForward;
+    public Vector3 ReferenceUp;
 }
 
 /// <summary>

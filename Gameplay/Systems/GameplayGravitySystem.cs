@@ -16,13 +16,6 @@ public class GameplayGravitySystem : QuerySystem<GravityAffected, PlayerVelocity
 
         foreach (var entity in Query.Entities)
         {
-            // Skip gravity in noclip mode
-            if (entity.HasComponent<PlayerNoclip>())
-            {
-                ref var noclip = ref entity.GetComponent<PlayerNoclip>();
-                if (noclip.IsActive) continue;
-            }
-
             ref var affected = ref entity.GetComponent<GravityAffected>();
             ref var velocity = ref entity.GetComponent<PlayerVelocity>();
             ref var gravity  = ref entity.GetComponent<PlayerGravity>();
@@ -64,7 +57,6 @@ public class GameplayGravitySystem : QuerySystem<GravityAffected, PlayerVelocity
                         vel -= gravityDir * (speedDown - gravity.MaxFallSpeed);
                 }
 
-                gravity.Direction = gravityDir;
             }
 
             velocity.Velocity = vel;

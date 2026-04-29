@@ -70,13 +70,12 @@ public partial class GameplaySession : Node
 	public Entity RegisterPlayer(CharacterBody3D body,
 								  float speed, float gravity, float maxFall,
 								  float jumpForce, float jumpBuffer,
-								  float noclipSpeedMul, float noclipVertSpeed,
 								  float rotationSpeed)
 	{
 		var entity = _store.CreateEntity(
 			new GodotBody      { InstanceId = body.GetInstanceId() },
 			new PlayerVelocity { Speed = speed },
-			new PlayerGravity  { Force = gravity, MaxFallSpeed = maxFall, Direction = Vector3.Down },
+			new PlayerGravity  { Force = gravity, MaxFallSpeed = maxFall },
 			new PlayerOrbitBoundary
 			{
 				LowOrbitHeightFactor = 0.5f,
@@ -85,14 +84,15 @@ public partial class GameplaySession : Node
 			},
 			new PlayerOrbitState(),
 			new PlayerJump     { JumpForce = jumpForce, BufferDuration = jumpBuffer },
-			new PlayerNoclip   { SpeedMultiplier = noclipSpeedMul, VerticalSpeed = noclipVertSpeed },
-			new PlayerHealth   { Current = 100f, Maximum = 100f },
-			new PlayerRotation { Speed = rotationSpeed },
+			new PlayerRotation
+			{
+				Speed = rotationSpeed,
+				Facing = (-body.GlobalTransform.Basis.Z).Normalized(),
+			},
 			Tags.Get<PlayerTag>()
 		);
 
 		_playerEntity = entity;
-		GD.Print($"[Gameplay] Player entity {entity.Id} registered");
 		return entity;
 	}
 
@@ -117,7 +117,6 @@ public partial class GameplaySession : Node
 			new CameraFollowsPlayer { Target = playerEntity },
 			Tags.Get<CameraTag>()
 		);
-		GD.Print($"[Gameplay] Camera entity {entity.Id} registered → follows player {playerEntity.Id}");
 		return entity;
 	}
 
@@ -173,11 +172,6 @@ public partial class GameplaySession : Node
 			if (!planet.IsNull)
 			{
 				_playerEntity.AddComponent(new GravityAffected { Planet = planet });
-				GD.Print($"[Gameplay] Player {_playerEntity.Id} linked to planet {planet.Id}");
-			}
-			else
-			{
-				GD.Print($"[Gameplay] Waiting for planet... GameSession.Instance={(GameSession.Instance != null ? "OK" : "null")}");
 			}
 		}
 

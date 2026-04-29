@@ -8,6 +8,19 @@ using Godot;
 /// </summary>
 public class GameplayPlanetAlignSystem : QuerySystem<GravityAffected, GodotBody>
 {
+    private static Vector3 GetStableTangent(Vector3 up, Vector3 preferred)
+    {
+        Vector3 tangent = preferred - up * preferred.Dot(up);
+        if (tangent.LengthSquared() < 0.0001f)
+        {
+            Vector3 axis = Mathf.Abs(up.Dot(Vector3.Up)) < 0.9f
+                ? Vector3.Up
+                : Vector3.Right;
+            tangent = axis - up * axis.Dot(up);
+        }
+        return tangent.Normalized();
+    }
+
     protected override void OnUpdate()
     {
         float dt = Tick.deltaTime;
@@ -38,24 +51,41 @@ public class GameplayPlanetAlignSystem : QuerySystem<GravityAffected, GodotBody>
             if (alignWeight <= 0.001f)
                 continue;
 
-            // Build target quaternion: Y = up, forward from input if available
+            // Build target quaternion: Y = up, forward from last input when idle
             Vector3 currentForward = -body.GlobalTransform.Basis.Z;
             Vector3 desiredForward = currentForward;
 
-            if (entity.HasComponent<PlayerVelocity>())
+            if (entity.HasComponent<PlayerRotation>())
+            {
+                ref var rotation = ref entity.GetComponent<PlayerRotation>();
+                Vector3 facing = rotation.Facing;
+                if (facing.LengthSquared() < 0.001f)
+                    facing = currentForward;
+
+                if (entity.HasComponent<PlayerVelocity>())
+                {
+                    var inputDir = entity.GetComponent<PlayerVelocity>().Direction;
+                    if (inputDir.LengthSquared() > 0.001f)
+                        facing = inputDir;
+                }
+
+                rotation.Facing = GetStableTangent(up, facing);
+                desiredForward = rotation.Facing;
+            }
+            else if (entity.HasComponent<PlayerVelocity>())
             {
                 var inputDir = entity.GetComponent<PlayerVelocity>().Direction;
-                Vector3 tangentInput = inputDir - up * inputDir.Dot(up);
-                if (tangentInput.LengthSquared() > 0.001f)
-                    desiredForward = tangentInput.Normalized();
+                if (inputDir.LengthSquared() > 0.001f)
+                    desiredForward = inputDir;
+
+                desiredForward = GetStableTangent(up, desiredForward);
+            }
+            else
+            {
+                desiredForward = GetStableTangent(up, desiredForward);
             }
 
-            Vector3 targetZ = desiredForward - up * desiredForward.Dot(up);
-            if (targetZ.LengthSquared() < 0.001f)
-                targetZ = currentForward - up * currentForward.Dot(up);
-            if (targetZ.LengthSquared() < 0.001f)
-                targetZ = body.GlobalTransform.Basis.X - up * body.GlobalTransform.Basis.X.Dot(up);
-            targetZ = targetZ.Normalized();
+            Vector3 targetZ = desiredForward;
 
             Vector3 targetX = up.Cross(targetZ).Normalized();
             targetZ = targetX.Cross(up).Normalized();
