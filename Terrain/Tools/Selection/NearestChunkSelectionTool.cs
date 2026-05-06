@@ -59,4 +59,15 @@ public static class NearestChunkSelectionTool
             Mathf.FloorToInt(worldPos.Z / CHUNK_SIZE)
         );
     }
+
+    /// <summary>
+    /// Returns chunk coordinates from a local position (e.g. viewer position relative to planet).
+    /// </summary>
+    public static (int x, int z) GetViewerChunkCoords(Vector3 localPosition, int CHUNK_SIZE)
+    {
+        return (
+            Mathf.FloorToInt(localPosition.X / CHUNK_SIZE),
+            Mathf.FloorToInt(localPosition.Z / CHUNK_SIZE)
+        );
+    }
 }

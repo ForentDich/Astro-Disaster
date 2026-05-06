@@ -22,6 +22,9 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 	public float HeightScale { get; set; } = 0.25f;
 	public int SeaLevelHeight { get; set; }
 
+	/// <summary>Planet position in world space. Used to offset viewer position for local-space calculations.</summary>
+	public Vector3 PlanetPosition { get; set; } = Vector3.Zero;
+
 	/// <summary>Reference to segment creator for resolving .seg destination path.</summary>
 	public SystemSegmentCreator SegmentCreator { get; set; }
 
@@ -64,7 +67,9 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 			return;
 		}
 
-		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_WORLD_SIZE);
+		// Use local viewer position relative to planet for chunk coordinate selection
+		Vector3 localViewerPos = Viewer.GlobalPosition - PlanetPosition;
+		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(localViewerPos, ChunkConstants.CHUNK_WORLD_SIZE);
 
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
 		_selectedCount = 0;

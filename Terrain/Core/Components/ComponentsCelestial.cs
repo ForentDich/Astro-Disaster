@@ -38,3 +38,39 @@ public enum CelestialType
     Asteroid,
     Comet
 }
+
+// ── Orbit ──
+
+public struct OrbitData : IComponent
+{
+    /// <summary>Orbit radius (distance from star center).</summary>
+    public float Distance;
+    /// <summary>Angular speed (radians per tick).</summary>
+    public float Speed;
+    /// <summary>Starting angle in radians.</summary>
+    public float InitialAngle;
+    /// <summary>Current angle in radians (updated each frame).</summary>
+    public float CurrentAngle;
+    /// <summary>Axial tilt in degrees (for seasons).</summary>
+    public float AxialTilt;
+}
+
+// ── Atmosphere ──
+
+public struct AtmosphereData : IComponent
+{
+    public float Height;
+    public Color Color;
+    public float Density;
+    public float MieScattering;
+    public float RayleighScattering;
+}
+
+// ── Surface ──
+
+public struct SurfaceData : IComponent
+{
+    public int Seed;
+    public float RotationSpeed;
+}
+

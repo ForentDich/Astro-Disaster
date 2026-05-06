@@ -12,6 +12,11 @@ public static class ConstantsCelestial
 	public const int MIN_HEIGHT = 0;
 
 	/// <summary>
+	/// Star radius in world units (40 km).
+	/// </summary>
+	public const float STAR_RADIUS = 40000f;
+
+	/// <summary>
 	/// Computes the planet radius from face geometry.
 	/// Radius = half the face size in world units.
 	/// Face size = SegmentsPerSide * SIDE * CHUNK_SIZE * TILE_SIZE.

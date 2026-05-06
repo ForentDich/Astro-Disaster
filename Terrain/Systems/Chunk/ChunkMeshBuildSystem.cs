@@ -23,6 +23,9 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 	public Node ParentNode { get; set; }
 	public Node3D Viewer { get; set; }
 
+	/// <summary>Planet position in world space. Used to offset mesh instances.</summary>
+	public Vector3 PlanetPosition { get; set; } = Vector3.Zero;
+
 	/// <summary>Reference to segment creator for face resolution and orientation.</summary>
 	public SystemSegmentCreator SegmentCreator { get; set; }
 
@@ -49,8 +52,13 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 
 		var commandBuffer = CommandBuffer;
 
+		// Use local viewer position relative to planet for chunk coordinate selection
+		Vector3 localViewerPos = Viewer != null
+			? Viewer.GlobalPosition - PlanetPosition
+			: Vector3.Zero;
+
 		(int centerX, int centerZ) = Viewer != null
-			? NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_WORLD_SIZE)
+			? NearestChunkSelectionTool.GetViewerChunkCoords(localViewerPos, ChunkConstants.CHUNK_WORLD_SIZE)
 			: (0, 0);
 
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
@@ -112,9 +120,9 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 					var existing = chunkMesh.GetMesh();
 					if (existing != null)
 					{
-						existing.Mesh = mesh;
-						existing.Name = $"Chunk_{info.X}_{info.Z}_F{info.FaceIndex}";
-						existing.Position = Vector3.Zero; // Spherical: position is baked into vertices
+					existing.Mesh = mesh;
+					existing.Name = $"Chunk_{info.X}_{info.Z}_F{info.FaceIndex}";
+					existing.Position = PlanetPosition; // Offset to planet position in world space
 					}
 					else
 					{
@@ -346,7 +354,7 @@ public class ChunkMeshBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		{
 			Mesh = mesh,
 			Name = $"Chunk_{info.X}_{info.Z}_F{info.FaceIndex}",
-			Position = Vector3.Zero // Spherical: position is baked into vertex coordinates
+			Position = PlanetPosition // Offset to planet position in world space
 		};
 
 		ParentNode.AddChild(meshInstance);

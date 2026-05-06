@@ -22,6 +22,9 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 	public Node ParentNode { get; set; }
 	public Node3D Viewer { get; set; }
 
+	/// <summary>Planet position in world space. Used to offset collision bodies.</summary>
+	public Vector3 PlanetPosition { get; set; } = Vector3.Zero;
+
 	/// <summary>Reference to segment creator for face resolution and orientation.</summary>
 	public SystemSegmentCreator SegmentCreator { get; set; }
 
@@ -65,8 +68,13 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 
 	private void BuildColliders(CommandBuffer buffer)
 	{
+		// Use local viewer position relative to planet for chunk coordinate selection
+		Vector3 localViewerPos = Viewer != null
+			? Viewer.GlobalPosition - PlanetPosition
+			: Vector3.Zero;
+
 		(int centerX, int centerZ) = Viewer != null
-			? NearestChunkSelectionTool.GetViewerChunkCoords(Viewer, ChunkConstants.CHUNK_WORLD_SIZE)
+			? NearestChunkSelectionTool.GetViewerChunkCoords(localViewerPos, ChunkConstants.CHUNK_WORLD_SIZE)
 			: (0, 0);
 
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
@@ -190,7 +198,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 			Name = $"ChunkBody_{info.X}_{info.Z}_F{info.FaceIndex}",
 			CollisionLayer = 1,
 			CollisionMask = 1,
-			Position = Vector3.Zero // Spherical: position is baked into vertex coordinates
+			Position = PlanetPosition // Offset to planet position in world space
 		};
 
 		body.AddChild(collisionShape);

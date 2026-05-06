@@ -30,8 +30,11 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 	public int CollisionDistance { get; set; } = 1;
 	public int MaxPerFrame { get; set; } = 8;
 	public float PlanetRadius { get; set; } = 1000f;
+	/// <summary>World position of the planet center. Used to offset viewer position for local-space calculations.</summary>
+	public Vector3 PlanetPosition { get; set; } = Vector3.Zero;
 
 	public SystemSegmentCreator SegmentCreator { get; set; }
+
 
 	protected override void OnAddStore(EntityStore store)
 	{
@@ -42,7 +45,8 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 	{
 		if (Viewer == null) return;
 
-		Vector3 viewerPos = Viewer.GlobalPosition;
+		// Convert viewer world position to planet-local coordinates
+		Vector3 viewerPos = Viewer.GlobalPosition - PlanetPosition;
 		bool playerMoved = !_initialized ||
 						  _lastViewerPos.DistanceSquaredTo(viewerPos) > 1.0f;
 
@@ -53,6 +57,7 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 
 			RecalculateVisibleAndQueue(viewerPos);
 		}
+
 
 		var buffer = CommandBuffer;
 		ProcessChunkCreation(buffer);
@@ -92,23 +97,13 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 		_createQueue.Clear();
 		_createIndex = 0;
 
-		Vector3 viewerDir = viewerPos.Normalized();
 		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
-		int faceResolution = CubeSphereProjection.GetFaceResolution(segmentsPerSide);
-		float maxArc = RenderDistance * ChunkConstants.CHUNK_WORLD_SIZE * Mathf.Sqrt(2f);
-		float safeRadius = Math.Max(PlanetRadius, 0.001f);
-		float maxAngle = maxArc / safeRadius;
-		float minDot = Mathf.Cos(Mathf.Min(maxAngle, Mathf.Pi));
 		var (minBound, maxBound) = GetChunkBounds();
 
 		for (int faceIndex = 0; faceIndex < ConstantsCelestial.FACE_COUNT; faceIndex++)
 		{
 			FaceOrientation? faceOrientation = SegmentCreator?.GetFaceOrientation(faceIndex);
 			if (!faceOrientation.HasValue)
-				continue;
-
-			FaceOrientation orientation = faceOrientation.Value;
-			if (viewerDir.Dot(orientation.Normal) <= 0f)
 				continue;
 
 			var (centerX, centerZ) = GetFaceChunkCoords(viewerPos, faceIndex);
@@ -120,7 +115,7 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 			{
 				if (r == 0)
 				{
-					AddVisibleAndMaybeQueue(centerX, centerZ, faceIndex, viewerDir, minDot, orientation, segmentsPerSide, faceResolution);
+					AddVisibleAndMaybeQueue(centerX, centerZ, faceIndex);
 					continue;
 				}
 
@@ -131,14 +126,14 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 
 				for (int x = minX; x <= maxX; x++)
 				{
-					AddVisibleAndMaybeQueue(x, minZ, faceIndex, viewerDir, minDot, orientation, segmentsPerSide, faceResolution);
-					AddVisibleAndMaybeQueue(x, maxZ, faceIndex, viewerDir, minDot, orientation, segmentsPerSide, faceResolution);
+					AddVisibleAndMaybeQueue(x, minZ, faceIndex);
+					AddVisibleAndMaybeQueue(x, maxZ, faceIndex);
 				}
 
 				for (int z = minZ + 1; z <= maxZ - 1; z++)
 				{
-					AddVisibleAndMaybeQueue(minX, z, faceIndex, viewerDir, minDot, orientation, segmentsPerSide, faceResolution);
-					AddVisibleAndMaybeQueue(maxX, z, faceIndex, viewerDir, minDot, orientation, segmentsPerSide, faceResolution);
+					AddVisibleAndMaybeQueue(minX, z, faceIndex);
+					AddVisibleAndMaybeQueue(maxX, z, faceIndex);
 				}
 			}
 		}
@@ -167,20 +162,9 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 			   chunkZ >= min && chunkZ <= max;
 	}
 
-	private void AddVisibleAndMaybeQueue(
-		int x,
-		int z,
-		int faceIndex,
-		Vector3 viewerDir,
-		float minDot,
-		FaceOrientation orientation,
-		int segmentsPerSide,
-		int faceResolution)
+	private void AddVisibleAndMaybeQueue(int x, int z, int faceIndex)
 	{
 		if (!IsWithinChunkBounds(x, z))
-			return;
-
-		if (!IsChunkWithinDistance(x, z, viewerDir, minDot, orientation, segmentsPerSide, faceResolution))
 			return;
 
 		var key = (x, z, faceIndex);
@@ -188,34 +172,6 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 
 		if (!_activeChunks.ContainsKey(key))
 			_createQueue.Add((x, z, faceIndex));
-	}
-
-	private bool IsChunkWithinDistance(
-		int chunkX,
-		int chunkZ,
-		Vector3 viewerDir,
-		float minDot,
-		FaceOrientation orientation,
-		int segmentsPerSide,
-		int faceResolution)
-	{
-		int local = ChunkConstants.CHUNK_SIZE / 2;
-		var (globalX, globalZ) = CubeSphereProjection.GetGlobalVertexCoords(
-			chunkX,
-			chunkZ,
-			local,
-			local,
-			segmentsPerSide);
-
-		Vector3 center = CubeSphereProjection.GetSpherePoint(
-			globalX,
-			globalZ,
-			faceResolution,
-			orientation,
-			PlanetRadius);
-		Vector3 chunkDir = center.Normalized();
-
-		return viewerDir.Dot(chunkDir) >= minDot;
 	}
 
 	private void ProcessChunkCreation(CommandBuffer buffer)

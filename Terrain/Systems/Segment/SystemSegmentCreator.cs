@@ -22,6 +22,9 @@ public class SystemSegmentCreator : BaseSystem
     public int LoadRadius { get; set; } = ConstantsSegment.LOAD_RADIUS;
     public int UnloadRadius { get; set; } = ConstantsSegment.UNLOAD_RADIUS;
     public float PlanetRadius { get; set; } = 1000f;
+    /// <summary>World position of the planet center. Used to offset viewer position for local-space calculations.</summary>
+    public Vector3 PlanetPosition { get; set; } = Vector3.Zero;
+
 
     // ── Internal state ──
     private EntityStore _store;
@@ -160,7 +163,8 @@ public class SystemSegmentCreator : BaseSystem
 
     private void UpdateSegmentsAroundViewer()
     {
-        Vector3 viewerPos = Viewer.GlobalPosition;
+        // Convert viewer world position to planet-local coordinates
+        Vector3 viewerPos = Viewer.GlobalPosition - PlanetPosition;
         int half = SegmentGridHalf;
 
         foreach (var kvp in _faceData)
@@ -170,6 +174,7 @@ public class SystemSegmentCreator : BaseSystem
 
             // Convert world position to face-local UV coordinates
             Vector2 faceUV = CubeSphereProjection.WorldToFaceUV(viewerPos, data.Orientation, PlanetRadius);
+
             var (gridX, gridZ) = CubeSphereProjection.UVToFaceGrid(faceUV, _segmentsPerSide);
 
             // Convert to segment coordinates
@@ -298,6 +303,26 @@ public class SystemSegmentCreator : BaseSystem
             h = h * 31 + segZ;
             return h & 0x7FFFFFFF;
         }
+    }
+
+    /// <summary>
+    /// Tries to find the primary planet entity in the store and returns its world position.
+    /// Returns Vector3.Zero if not found.
+    /// </summary>
+    public Vector3 TryGetPrimaryPlanetPosition()
+    {
+        if (_store == null)
+            return Vector3.Zero;
+
+        // Look for a celestial entity with CelestialPlanet tag and CelestialTransform component
+        var query = _store.Query<CelestialTransform>().AllTags(Tags.Get<CelestialPlanet>());
+        foreach (var entity in query.Entities)
+        {
+            ref var transform = ref entity.GetComponent<CelestialTransform>();
+            return transform.Position;
+        }
+
+        return Vector3.Zero;
     }
 
     /// <summary>

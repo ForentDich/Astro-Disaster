@@ -1,0 +1,64 @@
+[
+  {
+	"name": "Alpha System",
+	"star": {
+	  "name": "Alpha Centauri",
+	  "radius": 1000.0,
+	  "temperature": 5778,
+	  "luminosity": 1.5,
+	  "color": [1.0, 0.95, 0.8, 1.0]
+	},
+	"bodies": [
+	  {
+		"name": "Terra-Nova",
+		"type": "Planet",
+		"isPrimary": true,
+		"segmentsPerSide": 1,
+		"gravity": 9.8,
+		"orbit": {
+		  "distance": 16000.0,
+		  "speed": 0.00005,
+		  "initialAngle": 0.0,
+		  "axialTilt": 0
+		},
+		"atmosphere": {
+		  "enabled": true,
+		  "height": 1500.0,
+		  "color": [0.4, 0.6, 1.0, 1.0],
+		  "density": 1.0,
+		  "mieScattering": 0.005,
+		  "rayleighScattering": 0.002
+		},
+		"surface": {
+		  "seed": 12345,
+		  "rotationSpeed": 0.0002
+		}
+	  },
+	{
+		"name": "Terra-Nova2",
+		"type": "Planet",
+		"isPrimary": true,
+		"segmentsPerSide": 1,
+		"gravity": 9.8,
+		"orbit": {
+		  "distance": 15500.0,
+		  "speed": 0.00005,
+		  "initialAngle": 0.0,
+		  "axialTilt": 0
+		},
+		"atmosphere": {
+		  "enabled": true,
+		  "height": 1500.0,
+		  "color": [0.4, 0.6, 1.0, 1.0],
+		  "density": 1.0,
+		  "mieScattering": 0.005,
+		  "rayleighScattering": 0.002
+		},
+		"surface": {
+		  "seed": 12345,
+		  "rotationSpeed": 0.0002
+		}
+	  }
+	]
+  }
+]

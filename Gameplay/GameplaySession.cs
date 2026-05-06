@@ -188,7 +188,7 @@ public partial class GameplaySession : Node
 
 		foreach (var entity in terrainStore.Entities)
 		{
-			if (entity.HasComponent<GravitySource>())
+			if (entity.Tags.Has<CelestialPlanet>())
 				return entity;
 		}
 		return default;
