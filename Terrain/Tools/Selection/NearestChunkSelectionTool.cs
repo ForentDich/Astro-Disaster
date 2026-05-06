@@ -1,17 +1,15 @@
-using Godot;
-
 public static class NearestChunkSelectionTool
 {
-    public static void EnsureCapacity(ref int[] selectedEntityIds, ref int[] selectedDistances, int capacity)
+    public static void EnsureCapacity(ref int[] selectedEntityIds, ref float[] selectedDistances, int capacity)
     {
         if (selectedEntityIds == null || selectedEntityIds.Length < capacity)
         {
             selectedEntityIds = new int[capacity];
-            selectedDistances = new int[capacity];
+            selectedDistances = new float[capacity];
         }
     }
 
-    public static void TryInsertNearest(ref int selectedCount, int[] selectedEntityIds, int[] selectedDistances, int entityId, int distance, int max)
+    public static void TryInsertNearest(ref int selectedCount, int[] selectedEntityIds, float[] selectedDistances, int entityId, float distance, int max)
     {
         if (selectedCount < max)
         {
@@ -46,28 +44,5 @@ public static class NearestChunkSelectionTool
 
         selectedEntityIds[idx] = entityId;
         selectedDistances[idx] = distance;
-    }
-
-    public static (int x, int z) GetViewerChunkCoords(Node3D viewer, int CHUNK_SIZE)
-    {
-        if (viewer == null)
-            return (0, 0);
-
-        Vector3 worldPos = viewer.GlobalPosition;
-        return (
-            Mathf.FloorToInt(worldPos.X / CHUNK_SIZE),
-            Mathf.FloorToInt(worldPos.Z / CHUNK_SIZE)
-        );
-    }
-
-    /// <summary>
-    /// Returns chunk coordinates from a local position (e.g. viewer position relative to planet).
-    /// </summary>
-    public static (int x, int z) GetViewerChunkCoords(Vector3 localPosition, int CHUNK_SIZE)
-    {
-        return (
-            Mathf.FloorToInt(localPosition.X / CHUNK_SIZE),
-            Mathf.FloorToInt(localPosition.Z / CHUNK_SIZE)
-        );
     }
 }

@@ -74,6 +74,23 @@ public static class CubeSphereProjection
     }
 
     /// <summary>
+    /// Returns the world-space center of a chunk on the sphere (planet-local coordinates).
+    /// </summary>
+    public static Vector3 GetChunkCenterOnSphere(
+        int chunkX,
+        int chunkZ,
+        int segmentsPerSide,
+        FaceOrientation orientation,
+        float radius)
+    {
+        int localX = ChunkConstants.CHUNK_SIZE / 2;
+        int localZ = ChunkConstants.CHUNK_SIZE / 2;
+        int faceResolution = GetFaceResolution(segmentsPerSide);
+        var (globalX, globalZ) = GetGlobalVertexCoords(chunkX, chunkZ, localX, localZ, segmentsPerSide);
+        return GetSpherePoint(globalX, globalZ, faceResolution, orientation, radius);
+    }
+
+    /// <summary>
     /// Computes the global vertex index on the face from chunk and local vertex coordinates.
     /// </summary>
     public static (int globalX, int globalY) GetGlobalVertexCoords(
@@ -128,10 +145,14 @@ public static class CubeSphereProjection
         if (Mathf.Abs(dotN) < 0.0001f)
             return Vector2.Zero;
 
-        float u = dir.Dot(orientation.Right) / dotN;
-        float v = dir.Dot(orientation.Up) / dotN;
+        float tx = dir.Dot(orientation.Right) / dotN;
+        float ty = dir.Dot(orientation.Up) / dotN;
 
-        // Clamp to [-1, +1] range (for points beyond the face)
+        // Invert tangent projection: u = atan(tx) * 4 / PI
+        float u = Mathf.Atan(tx) * 4f / Mathf.Pi;
+        float v = Mathf.Atan(ty) * 4f / Mathf.Pi;
+
+        // Clamp to [-1, +1] range (safety)
         u = Mathf.Clamp(u, -1f, 1f);
         v = Mathf.Clamp(v, -1f, 1f);
 

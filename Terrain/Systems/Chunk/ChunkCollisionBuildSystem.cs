@@ -15,7 +15,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 	private ArchetypeQuery<ChunkInfo, ChunkCollider> _removalQuery;
 
 	private int[] _selectedEntityIds;
-	private int[] _selectedDistances;
+	private float[] _selectedDistances;
 	private int _selectedCount;
 
 	public int MaxPerFrame { get; set; } = 4;
@@ -73,10 +73,6 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 			? Viewer.GlobalPosition - PlanetPosition
 			: Vector3.Zero;
 
-		(int centerX, int centerZ) = Viewer != null
-			? NearestChunkSelectionTool.GetViewerChunkCoords(localViewerPos, ChunkConstants.CHUNK_WORLD_SIZE)
-			: (0, 0);
-
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
 		_selectedCount = 0;
 
@@ -86,9 +82,9 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				continue;
 
 			ref var info = ref entity.GetComponent<ChunkInfo>();
-			int dist = Viewer != null
-				? Math.Max(Math.Abs(info.X - centerX), Math.Abs(info.Z - centerZ))
-				: 0;
+			float dist = Viewer != null
+				? GetChunkDistanceSq(ref info, localViewerPos)
+				: 0f;
 
 			NearestChunkSelectionTool.TryInsertNearest(
 				ref _selectedCount,
@@ -136,6 +132,24 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 				GD.PrintErr($"[ChunkCollisionBuildSystem] Error building collider for entity {entityId}: {ex.Message}");
 			}
 		}
+	}
+
+	private float GetChunkDistanceSq(ref ChunkInfo info, Vector3 viewerLocalPos)
+	{
+		FaceOrientation? faceOrientation = SegmentCreator?.GetFaceOrientation(info.FaceIndex);
+		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
+		if (faceOrientation.HasValue)
+		{
+			Vector3 center = CubeSphereProjection.GetChunkCenterOnSphere(info.X, info.Z, segmentsPerSide, faceOrientation.Value, PlanetRadius);
+			return center.DistanceSquaredTo(viewerLocalPos);
+		}
+
+		float half = ChunkConstants.CHUNK_WORLD_SIZE * 0.5f;
+		Vector3 fallbackCenter = new Vector3(
+			info.X * ChunkConstants.CHUNK_WORLD_SIZE + half,
+			0f,
+			info.Z * ChunkConstants.CHUNK_WORLD_SIZE + half);
+		return fallbackCenter.DistanceSquaredTo(viewerLocalPos);
 	}
 
 	private StaticBody3D BuildCollisionBody(byte[] data, ChunkInfo info)

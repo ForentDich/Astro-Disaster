@@ -8,6 +8,7 @@ public partial class GameSession : Node
 	[Export] public Node3D Viewer { get; set; }
 	[Export] public int RenderDistance { get; set; } = 5;
 	[Export] public int CollisionDistance { get; set; } = 1;
+	[Export] public float SphericalLoadRadius { get; set; } = 0f;
 
 	[ExportGroup("Generation")]
 	[Export] public NoiseSettings NoiseSettings { get; set; }
@@ -179,7 +180,8 @@ public partial class GameSession : Node
 			MaxPerFrame = MaxCreatePerFrame,
 			SegmentCreator = _segmentCreator,
 			PlanetRadius = planetRadius,
-			PlanetPosition = initialPlanetPos
+			PlanetPosition = initialPlanetPos,
+			SphericalLoadRadius = SphericalLoadRadius
 		};
 
 		var removalSystem = new ChunkRemovalSystem

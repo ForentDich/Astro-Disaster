@@ -22,8 +22,6 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 	private bool _initialized;
 	private EntityStore _store;
 
-	/// <summary>Per-face last chunk center positions.</summary>
-	private readonly Dictionary<int, (int x, int z)> _lastFaceChunkPos = new();
 
 	public Node3D Viewer { get; set; }
 	public int RenderDistance { get; set; } = 5;
@@ -32,6 +30,8 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 	public float PlanetRadius { get; set; } = 1000f;
 	/// <summary>World position of the planet center. Used to offset viewer position for local-space calculations.</summary>
 	public Vector3 PlanetPosition { get; set; } = Vector3.Zero;
+	/// <summary>Optional spherical load radius in world units (0 = auto from RenderDistance).</summary>
+	public float SphericalLoadRadius { get; set; } = 0f;
 
 	public SystemSegmentCreator SegmentCreator { get; set; }
 
@@ -66,29 +66,27 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 	}
 
 	/// <summary>
-	/// Gets chunk coordinates for a specific face by converting world position
-	/// to face-local UV coordinates.
+	/// Gets chunk coordinates for a face using the viewer direction projected onto that face.
 	/// </summary>
-	private (int x, int z) GetFaceChunkCoords(Vector3 worldPos, int faceIndex)
+	private bool TryGetFaceChunkCoords(Vector3 localViewerPos, int faceIndex, out int chunkX, out int chunkZ, out FaceOrientation orientation)
 	{
-		FaceOrientation? orientation = SegmentCreator?.GetFaceOrientation(faceIndex);
-		if (orientation == null)
-			return (0, 0);
+		chunkX = 0;
+		chunkZ = 0;
+		orientation = default;
 
-		FaceOrientation ori = orientation.Value;
+		FaceOrientation? faceOrientation = SegmentCreator?.GetFaceOrientation(faceIndex);
+		if (!faceOrientation.HasValue)
+			return false;
 
-		// Convert world position to face-local UV coordinates
-		Vector2 faceUV = CubeSphereProjection.WorldToFaceUV(worldPos, ori, PlanetRadius);
+		orientation = faceOrientation.Value;
+		Vector2 faceUV = CubeSphereProjection.WorldToFaceUV(localViewerPos, orientation, PlanetRadius);
 
-		// Convert UV to face grid coordinates (in chunk units)
 		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
 		var (gridX, gridZ) = CubeSphereProjection.UVToFaceGrid(faceUV, segmentsPerSide);
 
-		// Convert to chunk coordinates
-		int chunkX = Mathf.FloorToInt(gridX);
-		int chunkZ = Mathf.FloorToInt(gridZ);
-
-		return (chunkX, chunkZ);
+		chunkX = Mathf.FloorToInt(gridX);
+		chunkZ = Mathf.FloorToInt(gridZ);
+		return true;
 	}
 
 	private void RecalculateVisibleAndQueue(Vector3 viewerPos)
@@ -98,42 +96,30 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 		_createIndex = 0;
 
 		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
+		int faceResolution = CubeSphereProjection.GetFaceResolution(segmentsPerSide);
+		float loadRadius = GetLoadRadiusWorld();
+		float loadRadiusSq = loadRadius > 0f ? GetPaddedLoadRadiusSq(loadRadius) : -1f;
+		int gridRadius = GetGridRadius(loadRadius);
 		var (minBound, maxBound) = GetChunkBounds();
 
 		for (int faceIndex = 0; faceIndex < ConstantsCelestial.FACE_COUNT; faceIndex++)
 		{
-			FaceOrientation? faceOrientation = SegmentCreator?.GetFaceOrientation(faceIndex);
-			if (!faceOrientation.HasValue)
+			if (!TryGetFaceChunkCoords(viewerPos, faceIndex, out int centerX, out int centerZ, out FaceOrientation orientation))
 				continue;
 
-			var (centerX, centerZ) = GetFaceChunkCoords(viewerPos, faceIndex);
 			centerX = Math.Clamp(centerX, minBound, maxBound);
 			centerZ = Math.Clamp(centerZ, minBound, maxBound);
-			_lastFaceChunkPos[faceIndex] = (centerX, centerZ);
 
-			for (int r = 0; r <= RenderDistance; r++)
+			int minX = centerX - gridRadius;
+			int maxX = centerX + gridRadius;
+			int minZ = centerZ - gridRadius;
+			int maxZ = centerZ + gridRadius;
+
+			for (int x = minX; x <= maxX; x++)
 			{
-				if (r == 0)
+				for (int z = minZ; z <= maxZ; z++)
 				{
-					AddVisibleAndMaybeQueue(centerX, centerZ, faceIndex);
-					continue;
-				}
-
-				int minX = centerX - r;
-				int maxX = centerX + r;
-				int minZ = centerZ - r;
-				int maxZ = centerZ + r;
-
-				for (int x = minX; x <= maxX; x++)
-				{
-					AddVisibleAndMaybeQueue(x, minZ, faceIndex);
-					AddVisibleAndMaybeQueue(x, maxZ, faceIndex);
-				}
-
-				for (int z = minZ + 1; z <= maxZ - 1; z++)
-				{
-					AddVisibleAndMaybeQueue(minX, z, faceIndex);
-					AddVisibleAndMaybeQueue(maxX, z, faceIndex);
+					AddVisibleAndMaybeQueue(x, z, faceIndex, viewerPos, orientation, segmentsPerSide, faceResolution, loadRadiusSq);
 				}
 			}
 		}
@@ -162,16 +148,63 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 			   chunkZ >= min && chunkZ <= max;
 	}
 
-	private void AddVisibleAndMaybeQueue(int x, int z, int faceIndex)
+	private void AddVisibleAndMaybeQueue(
+		int x,
+		int z,
+		int faceIndex,
+		Vector3 viewerLocalPos,
+		FaceOrientation orientation,
+		int segmentsPerSide,
+		int faceResolution,
+		float loadRadiusSq)
 	{
 		if (!IsWithinChunkBounds(x, z))
 			return;
+
+		if (loadRadiusSq > 0f)
+		{
+			Vector3 chunkCenter = GetChunkCenterLocal(x, z, orientation, segmentsPerSide, faceResolution);
+			if (chunkCenter.DistanceSquaredTo(viewerLocalPos) > loadRadiusSq)
+				return;
+		}
 
 		var key = (x, z, faceIndex);
 		_visible.Add(key);
 
 		if (!_activeChunks.ContainsKey(key))
 			_createQueue.Add((x, z, faceIndex));
+	}
+
+	private float GetLoadRadiusWorld()
+	{
+		if (SphericalLoadRadius > 0f)
+			return SphericalLoadRadius;
+
+		return RenderDistance * ChunkConstants.CHUNK_WORLD_SIZE;
+	}
+
+	private static float GetPaddedLoadRadiusSq(float loadRadius)
+	{
+		float pad = ChunkConstants.CHUNK_WORLD_SIZE * 0.75f;
+		float padded = loadRadius + pad;
+		return padded * padded;
+	}
+
+	private static int GetGridRadius(float loadRadius)
+	{
+		if (loadRadius <= 0f)
+			return 0;
+
+		float chunks = loadRadius / ChunkConstants.CHUNK_WORLD_SIZE;
+		return Mathf.Max(1, Mathf.CeilToInt(chunks) + 1);
+	}
+
+	private Vector3 GetChunkCenterLocal(int chunkX, int chunkZ, FaceOrientation orientation, int segmentsPerSide, int faceResolution)
+	{
+		int localX = ChunkConstants.CHUNK_SIZE / 2;
+		int localZ = ChunkConstants.CHUNK_SIZE / 2;
+		var (globalX, globalZ) = CubeSphereProjection.GetGlobalVertexCoords(chunkX, chunkZ, localX, localZ, segmentsPerSide);
+		return CubeSphereProjection.GetSpherePoint(globalX, globalZ, faceResolution, orientation, PlanetRadius);
 	}
 
 	private void ProcessChunkCreation(CommandBuffer buffer)
@@ -230,16 +263,12 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 
 	private byte CalculateLOD(int chunkX, int chunkZ, int faceIndex)
 	{
-		if (!_lastFaceChunkPos.TryGetValue(faceIndex, out var center))
-			return 0;
+		float distanceSq = GetChunkDistanceSq(chunkX, chunkZ, faceIndex);
+		float distance = Mathf.Sqrt(distanceSq) / ChunkConstants.CHUNK_WORLD_SIZE;
 
-		int dx = Math.Abs(chunkX - center.x);
-		int dz = Math.Abs(chunkZ - center.z);
-		int distance = Math.Max(dx, dz);
-
-		if (distance <= 2) return 0;
-		if (distance <= 4) return 1;
-		if (distance <= 6) return 2;
+		if (distance <= 2f) return 0;
+		if (distance <= 4f) return 1;
+		if (distance <= 6f) return 2;
 		return 3;
 	}
 
@@ -292,10 +321,31 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 
 	private bool ShouldHaveCollision(int chunkX, int chunkZ, int faceIndex)
 	{
-		if (!_lastFaceChunkPos.TryGetValue(faceIndex, out var center))
-			return false;
+		float radius = CollisionDistance * ChunkConstants.CHUNK_WORLD_SIZE;
+		float distanceSq = GetChunkDistanceSq(chunkX, chunkZ, faceIndex);
+		return distanceSq <= radius * radius;
+	}
 
-		return Math.Abs(chunkX - center.x) <= CollisionDistance &&
-			   Math.Abs(chunkZ - center.z) <= CollisionDistance;
+	private float GetChunkDistanceSq(int chunkX, int chunkZ, int faceIndex)
+	{
+		FaceOrientation? faceOrientation = SegmentCreator?.GetFaceOrientation(faceIndex);
+		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
+		if (faceOrientation.HasValue)
+		{
+			Vector3 center = CubeSphereProjection.GetChunkCenterOnSphere(
+				chunkX,
+				chunkZ,
+				segmentsPerSide,
+				faceOrientation.Value,
+				PlanetRadius);
+			return center.DistanceSquaredTo(_lastViewerPos);
+		}
+
+		float half = ChunkConstants.CHUNK_WORLD_SIZE * 0.5f;
+		Vector3 fallbackCenter = new Vector3(
+			chunkX * ChunkConstants.CHUNK_WORLD_SIZE + half,
+			0f,
+			chunkZ * ChunkConstants.CHUNK_WORLD_SIZE + half);
+		return fallbackCenter.DistanceSquaredTo(_lastViewerPos);
 	}
 }

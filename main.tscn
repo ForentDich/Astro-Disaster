@@ -58,7 +58,7 @@ directional_shadow_max_distance = 300.0
 [node name="WorldTerrain" type="Node3D" parent="." unique_id=1236874063 node_paths=PackedStringArray("Viewer", "SunLight", "WorldEnvironment")]
 script = ExtResource("14_w48qg")
 Viewer = NodePath("../Player")
-RenderDistance = 14
+RenderDistance = 8
 NoiseSettings = ExtResource("15_2cqfq")
 HeightScale = 1.0
 MaxCreatePerFrame = 32

@@ -13,7 +13,7 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 	private EntityStore _store;
 
 	private int[] _selectedEntityIds;
-	private int[] _selectedDistances;
+	private float[] _selectedDistances;
 	private int _selectedCount;
 
 	public int MaxPerFrame { get; set; } = 4;
@@ -69,7 +69,6 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 
 		// Use local viewer position relative to planet for chunk coordinate selection
 		Vector3 localViewerPos = Viewer.GlobalPosition - PlanetPosition;
-		(int centerX, int centerZ) = NearestChunkSelectionTool.GetViewerChunkCoords(localViewerPos, ChunkConstants.CHUNK_WORLD_SIZE);
 
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
 		_selectedCount = 0;
@@ -77,7 +76,7 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 		foreach (var entity in Query.Entities)
 		{
 			ref var info = ref entity.GetComponent<ChunkInfo>();
-			int dist = Math.Max(Math.Abs(info.X - centerX), Math.Abs(info.Z - centerZ));
+			float dist = GetChunkDistanceSq(ref info, localViewerPos);
 			NearestChunkSelectionTool.TryInsertNearest(
 				ref _selectedCount,
 				_selectedEntityIds,
@@ -96,6 +95,27 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 			ref var info = ref entity.GetComponent<ChunkInfo>();
 			TryGenerateChunk(entityId, ref info, commandBuffer);
 		}
+	}
+
+	private float GetChunkDistanceSq(ref ChunkInfo info, Vector3 viewerLocalPos)
+	{
+		FaceOrientation? faceOrientation = SegmentCreator?.GetFaceOrientation(info.FaceIndex);
+		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
+		if (faceOrientation.HasValue)
+		{
+			float radius = SegmentCreator != null
+				? SegmentCreator.PlanetRadius
+				: ConstantsCelestial.ComputeRadius(segmentsPerSide);
+			Vector3 center = CubeSphereProjection.GetChunkCenterOnSphere(info.X, info.Z, segmentsPerSide, faceOrientation.Value, radius);
+			return center.DistanceSquaredTo(viewerLocalPos);
+		}
+
+		float half = ChunkConstants.CHUNK_WORLD_SIZE * 0.5f;
+		Vector3 fallbackCenter = new Vector3(
+			info.X * ChunkConstants.CHUNK_WORLD_SIZE + half,
+			0f,
+			info.Z * ChunkConstants.CHUNK_WORLD_SIZE + half);
+		return fallbackCenter.DistanceSquaredTo(viewerLocalPos);
 	}
 
 	private void TryGenerateChunk(int entityId, ref ChunkInfo info, CommandBuffer commandBuffer)
