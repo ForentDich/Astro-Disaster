@@ -75,11 +75,12 @@ WorldEnvironment = NodePath("../WorldEnv")
 script = ExtResource("7_5vw27")
 
 [node name="Player" parent="." unique_id=73761922 instance=ExtResource("9_kek77")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2500, 89.203)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1500, 89.203)
 script = ExtResource("9_4c57u")
 Speed = 90.0
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=900992571]
+far = 40000.0
 script = ExtResource("10_4c57u")
 PlayerNodePath = NodePath("../Player")
 

@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_disabled;
+render_mode depth_draw_opaque, cull_back, diffuse_burley, specular_disabled;
 
 group_uniforms runtime;
 uniform sampler2DArray terrain_textures : source_color, filter_nearest_mipmap, repeat_enable;
@@ -30,5 +30,6 @@ void fragment()
 
     // Простое смешивание текстуры и цвета без шума и вариаций
     ALBEDO = clamp(tex.rgb * tint.rgb, vec3(0.0), vec3(1.0));
+    ALPHA = 1.0;
     ROUGHNESS = 1.0; // Значение по умолчанию (матовое)
 }

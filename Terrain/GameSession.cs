@@ -47,6 +47,7 @@ public partial class GameSession : Node
 	private ChunkDataGenerationSystem _chunkDataGen;
 	private ChunkMeshBuildSystem _meshBuildSystem;
 	private ChunkCollisionBuildSystem _collisionBuildSystem;
+	private PlanetProxySystem _planetProxySystem;
 
 	private ChunkVisibilitySystem _visibilitySystem;
 	private Label _biomeLabel;
@@ -221,6 +222,17 @@ public partial class GameSession : Node
 			PlanetPosition = initialPlanetPos
 		};
 
+		_planetProxySystem = new PlanetProxySystem
+		{
+			Viewer = Viewer,
+			ParentNode = this,
+			NoiseSettings = NoiseSettings,
+			HeightScale = HeightScale,
+			LoadRadius = SphericalLoadRadius > 0f
+				? SphericalLoadRadius
+				: RenderDistance * ChunkConstants.CHUNK_WORLD_SIZE
+		};
+
 		var sunDirectionSystem = new SunDirectionSystem
 		{
 			SunLight = SunLight,
@@ -234,6 +246,7 @@ public partial class GameSession : Node
 			starCreator,
 			celestialCreator,
 			_segmentCreator,
+			_planetProxySystem,
 			_visibilitySystem,
 			removalSystem,
 			_chunkDataGen,

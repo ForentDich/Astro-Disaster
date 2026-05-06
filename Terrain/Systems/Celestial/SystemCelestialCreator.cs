@@ -85,12 +85,12 @@ public class SystemCelestialCreator : BaseSystem
         CelestialType type = bodyDef.Type switch
         {
             "Moon" => CelestialType.Moon,
-            _      => CelestialType.Planet
+            _ => CelestialType.Planet
         };
 
         celestial.AddComponent(new CelestialIdentity
         {
-            Id   = celestialId,
+            Id = celestialId,
             Type = type
         });
 
@@ -112,7 +112,7 @@ public class SystemCelestialCreator : BaseSystem
         {
             Position = startPos,
             Rotation = Quaternion.Identity,
-            Scale    = Vector3.One
+            Scale = Vector3.One
         });
 
         // ── Status (gravity) ──
@@ -123,17 +123,17 @@ public class SystemCelestialCreator : BaseSystem
         {
             Center = startPos,
             Radius = radius,
-            GM     = bodyDef.Gravity * radius * radius
+            GM = bodyDef.Gravity * radius * radius
         });
 
         // ── Orbit ──
         celestial.AddComponent(new OrbitData
         {
-            Distance     = bodyDef.Orbit.Distance,
-            Speed        = bodyDef.Orbit.Speed,
+            Distance = bodyDef.Orbit.Distance,
+            Speed = bodyDef.Orbit.Speed,
             InitialAngle = angleRad,
             CurrentAngle = angleRad,
-            AxialTilt    = bodyDef.Orbit.AxialTilt
+            AxialTilt = bodyDef.Orbit.AxialTilt
         });
 
         // ── Atmosphere ──
@@ -141,10 +141,10 @@ public class SystemCelestialCreator : BaseSystem
         {
             celestial.AddComponent(new AtmosphereData
             {
-                Height             = bodyDef.Atmosphere.Height,
-                Color              = bodyDef.Atmosphere.Color,
-                Density            = bodyDef.Atmosphere.Density,
-                MieScattering      = bodyDef.Atmosphere.MieScattering,
+                Height = bodyDef.Atmosphere.Height,
+                Color = bodyDef.Atmosphere.Color,
+                Density = bodyDef.Atmosphere.Density,
+                MieScattering = bodyDef.Atmosphere.MieScattering,
                 RayleighScattering = bodyDef.Atmosphere.RayleighScattering
             });
             celestial.AddTag<CelestialHasAtmosphere>();
@@ -153,7 +153,7 @@ public class SystemCelestialCreator : BaseSystem
         // ── Surface ──
         celestial.AddComponent(new SurfaceData
         {
-            Seed          = bodyDef.Surface.Seed,
+            Seed = bodyDef.Surface.Seed,
             RotationSpeed = bodyDef.Surface.RotationSpeed
         });
 
@@ -166,6 +166,17 @@ public class SystemCelestialCreator : BaseSystem
             celestial.AddTag<CelestialPlanet>();
         else if (type == CelestialType.Moon)
             celestial.AddTag<CelestialMoon>();
+
+
+        celestial.AddComponent(new PlanetProxySettings
+        {
+            Enabled = true,
+            ResolutionDiv = 4,
+            InnerRadius = 0f,
+            OuterRadius = 0f,
+            ProxySink = 8.0f,
+            ProxyDiscardRadius = 250.0f
+        });
 
         celestial.AddTag<CelestialNeedsFaces>();
 
@@ -258,8 +269,8 @@ public class SystemCelestialCreator : BaseSystem
         face.AddComponent(new FaceOrientation
         {
             Normal = worldNormal,
-            Up     = worldUp,
-            Right  = worldRight
+            Up = worldUp,
+            Right = worldRight
         });
         face.AddComponent(new FaceStorage { SavePath = celestialPath });
         face.AddComponent(new FaceParent { Celestial = celestial });

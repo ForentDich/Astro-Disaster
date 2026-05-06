@@ -74,3 +74,21 @@ public struct SurfaceData : IComponent
     public float RotationSpeed;
 }
 
+// ── Planet proxy ──
+
+public struct PlanetProxySettings : IComponent
+{
+    public bool Enabled;
+    public int ResolutionDiv;
+    public float InnerRadius;
+    public float OuterRadius;
+    public float ProxySink;
+    public float ProxyDiscardRadius;
+}
+
+public struct PlanetProxyMesh : IComponent
+{
+    public ulong InstanceId;
+    public MeshInstance3D GetMesh() => GodotObject.InstanceFromId(InstanceId) as MeshInstance3D;
+}
+
