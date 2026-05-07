@@ -5,6 +5,7 @@ using System;
 
 /// <summary>
 /// Builds and updates proxy spheres for planets using ECS data.
+/// The proxy uses the same tint_lut as chunk terrain for identical coloring.
 /// </summary>
 public class PlanetProxySystem : QuerySystem<CelestialGeometry, CelestialTransform, SurfaceData, PlanetProxySettings>
 {
@@ -16,6 +17,8 @@ public class PlanetProxySystem : QuerySystem<CelestialGeometry, CelestialTransfo
     public NoiseSettings NoiseSettings { get; set; }
     public float HeightScale { get; set; } = 0.3f;
     public float LoadRadius { get; set; } = 0f;
+    /// <summary>Terrain material with tint_lut to copy to proxy shader.</summary>
+    public Material TerrainMaterial { get; set; }
 
     public PlanetProxySystem()
         => Filter.AllTags(Tags.Get<CelestialPlanet, CelestialActive>());
@@ -158,6 +161,9 @@ public class PlanetProxySystem : QuerySystem<CelestialGeometry, CelestialTransfo
             Shader = GD.Load<Shader>("res://Terrain/Shaders/planet_proxy.gdshader")
         };
 
+        // Copy tint_lut from terrain material (one-time setup)
+        CopyTerrainUniforms(material);
+
         MeshInstance3D meshInstance = new MeshInstance3D
         {
             Name = $"PlanetProxy_{entity.Id}",
@@ -169,6 +175,42 @@ public class PlanetProxySystem : QuerySystem<CelestialGeometry, CelestialTransfo
 
         ParentNode.AddChild(meshInstance);
         return meshInstance;
+    }
+
+    /// <summary>
+    /// Copies terrain_textures, tint_lut and surface_count from the terrain material
+    /// to the proxy material. This is done once at creation time.
+    /// </summary>
+    private void CopyTerrainUniforms(ShaderMaterial proxyMaterial)
+    {
+        if (TerrainMaterial == null)
+        {
+            GD.Print("[PlanetProxySystem] No TerrainMaterial set, proxy will use fallback colors.");
+            return;
+        }
+
+        if (TerrainMaterial is not ShaderMaterial terrainShader)
+        {
+            GD.Print("[PlanetProxySystem] TerrainMaterial is not a ShaderMaterial, cannot copy uniforms.");
+            return;
+        }
+
+        // Copy texture array (for world-space UV tiling)
+        var textures = terrainShader.GetShaderParameter("terrain_textures");
+        if (textures.VariantType != Variant.Type.Nil)
+            proxyMaterial.SetShaderParameter("terrain_textures", textures);
+
+        // Copy tint lookup
+        var tintLut = terrainShader.GetShaderParameter("tint_lut");
+        if (tintLut.VariantType != Variant.Type.Nil)
+            proxyMaterial.SetShaderParameter("tint_lut", tintLut);
+
+        // Copy surface count
+        var surfaceCount = terrainShader.GetShaderParameter("surface_count");
+        if (surfaceCount.VariantType != Variant.Type.Nil)
+            proxyMaterial.SetShaderParameter("surface_count", surfaceCount);
+
+        GD.Print("[PlanetProxySystem] Copied terrain textures and tint_lut to proxy material.");
     }
 
     private int ResolveSegmentsPerSide(Entity entity)
@@ -190,7 +232,11 @@ public class PlanetProxySystem : QuerySystem<CelestialGeometry, CelestialTransfo
         return 1;
     }
 
-    private (Vector3 position, Color color) BuildVertex(Vector3 spherePos, float radius, float sink)
+    /// <summary>
+    /// Builds a vertex with position and surface index.
+    /// Surface index is stored in UV2.x for the shader to look up the tint color.
+    /// </summary>
+    private (Vector3 position, int surfaceIndex) BuildVertex(Vector3 spherePos, float radius, float sink)
     {
         float wx = spherePos.X;
         float wy = spherePos.Y;
@@ -210,9 +256,8 @@ public class PlanetProxySystem : QuerySystem<CelestialGeometry, CelestialTransfo
         int zone = (int)_noiseGenerator.GetZoneWithRiver3D(c, e, wx, wy, wz);
         int biomeIndex = BiomeRegistry.GetBiome(zone, e);
         int surfaceIndex = ResolveSurfaceIndex(biomeIndex, heightValue);
-        Color color = ResolveSurfaceColor(surfaceIndex);
 
-        return (position, color);
+        return (position, surfaceIndex);
     }
 
     private static int ResolveSurfaceIndex(int biomeIndex, int height)
@@ -235,23 +280,21 @@ public class PlanetProxySystem : QuerySystem<CelestialGeometry, CelestialTransfo
         return Math.Clamp(rules[0].SurfaceIndex, 0, ChunkConstants.SURFACE_MASK);
     }
 
-    private static Color ResolveSurfaceColor(int surfaceIndex)
+    private static void AddTriangle(
+        SurfaceTool st,
+        (Vector3 position, int surfaceIndex) a,
+        (Vector3 position, int surfaceIndex) b,
+        (Vector3 position, int surfaceIndex) c)
     {
-        if (surfaceIndex >= 0 && surfaceIndex < SurfaceRegistry.Count)
-            return SurfaceRegistry.Surfaces[surfaceIndex].Tint;
+        Vector2 uv2 = new Vector2(a.surfaceIndex, 0f);
 
-        return new Color(0.45f, 0.72f, 0.42f, 1f);
-    }
-
-    private static void AddTriangle(SurfaceTool st, (Vector3 position, Color color) a, (Vector3 position, Color color) b, (Vector3 position, Color color) c)
-    {
-        st.SetColor(a.color);
+        st.SetUV2(uv2);
         st.AddVertex(a.position);
 
-        st.SetColor(b.color);
+        st.SetUV2(uv2);
         st.AddVertex(b.position);
 
-        st.SetColor(c.color);
+        st.SetUV2(uv2);
         st.AddVertex(c.position);
     }
 

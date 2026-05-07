@@ -3,13 +3,13 @@ using Friflo.Engine.ECS.Systems;
 using Godot;
 
 /// <summary>
-/// Orients a DirectionalLight3D to point toward the star (sun).
+/// Orients a DirectionalLight3D so that light rays travel from the star toward the planet.
 ///
 /// Pipeline position: after all chunk systems, runs every frame.
 ///
-/// Finds the entity with CelestialSun tag, computes direction from
-/// the viewer (player) to the star, and rotates the DirectionalLight3D
-/// accordingly. Also updates the sky shader's sun_direction parameter.
+/// Finds the entity with CelestialSun tag, finds the primary planet,
+/// and rotates the DirectionalLight3D so it shines from star → planet.
+/// Also updates the sky shader's sun_direction parameter.
 /// </summary>
 public class SunDirectionSystem : BaseSystem
 {
@@ -75,14 +75,26 @@ public class SunDirectionSystem : BaseSystem
     {
         // Star is at world origin (0,0,0)
         Vector3 starPosition = Vector3.Zero;
-        Vector3 viewerPosition = Viewer.GlobalPosition;
 
-        // Direction from viewer to star
-        Vector3 direction = (starPosition - viewerPosition).Normalized();
+        // Find the primary planet to compute light direction
+        Vector3 planetPosition = FindPrimaryPlanetPosition();
+        Vector3 toPlanet = planetPosition - starPosition;
+        if (toPlanet.LengthSquared() < 0.001f)
+            return;
 
-        // Rotate the directional light to point toward the star
-        SunLight.GlobalRotation = Vector3.Zero;
-        SunLight.LookAt(starPosition);
+        // Light direction: from star toward planet
+        Vector3 lightDirection = toPlanet.Normalized();
+        Vector3 skySunDirection = -lightDirection;
+
+        // Avoid degenerate up vectors when the direction is nearly vertical.
+        Vector3 up = Vector3.Up;
+        if (Mathf.Abs(lightDirection.Dot(up)) > 0.999f)
+            up = Vector3.Forward;
+
+        // Rotate the directional light to shine from star → planet.
+        // DirectionalLight3D's -Z axis is its forward direction.
+        // Use Basis.LookingAt to point -Z along lightDirection.
+        SunLight.GlobalBasis = Basis.LookingAt(lightDirection, up);
 
         // Update sky shader sun_direction if WorldEnvironment is available
         if (WorldEnvironment != null)
@@ -90,8 +102,21 @@ public class SunDirectionSystem : BaseSystem
             var sky = WorldEnvironment.Environment?.Sky;
             if (sky?.SkyMaterial is ShaderMaterial skyMat)
             {
-                skyMat.SetShaderParameter("sun_direction", direction);
+                skyMat.SetShaderParameter("sun_direction", skySunDirection);
             }
         }
+    }
+
+    private Vector3 FindPrimaryPlanetPosition()
+    {
+        foreach (var entity in _store.Entities)
+        {
+            if (entity.Tags.Has<CelestialPlanet>() && entity.Tags.Has<CelestialActive>())
+            {
+                if (entity.TryGetComponent<CelestialTransform>(out var transform))
+                    return transform.Position;
+            }
+        }
+        return Vector3.Zero;
     }
 }

@@ -16,18 +16,16 @@
 		"segmentsPerSide": 1,
 		"gravity": 9.8,
 		"orbit": {
-		  "distance": 0.0,
+		  "distance": 8000.0,
 		  "speed": 0.00005,
 		  "initialAngle": 0.0,
 		  "axialTilt": 0
 		},
 		"atmosphere": {
 		  "enabled": true,
-		  "height": 1500.0,
+		  "height": 1200.0,
 		  "color": [0.4, 0.6, 1.0, 1.0],
-		  "density": 1.0,
-		  "mieScattering": 0.005,
-		  "rayleighScattering": 0.002
+		  "density": 1.6
 		},
 		"surface": {
 		  "seed": 12345,

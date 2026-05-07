@@ -39,8 +39,6 @@ public static class SolarSystemConfig
         public float Height;
         public Color Color;
         public float Density;
-        public float MieScattering;
-        public float RayleighScattering;
     }
 
     public struct SurfaceDef
@@ -174,9 +172,7 @@ public static class SolarSystemConfig
                 Enabled            = atmoEl.GetProperty("enabled").GetBoolean(),
                 Height             = atmoEl.GetProperty("height").GetSingle(),
                 Color              = new Color(atmoColorArr[0].GetSingle(), atmoColorArr[1].GetSingle(), atmoColorArr[2].GetSingle(), atmoColorArr[3].GetSingle()),
-                Density            = atmoEl.GetProperty("density").GetSingle(),
-                MieScattering      = atmoEl.GetProperty("mieScattering").GetSingle(),
-                RayleighScattering = atmoEl.GetProperty("rayleighScattering").GetSingle()
+                Density            = atmoEl.GetProperty("density").GetSingle()
             },
             Surface = new SurfaceDef
             {

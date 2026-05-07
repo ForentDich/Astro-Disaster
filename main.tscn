@@ -1,17 +1,17 @@
 [gd_scene format=3 uid="uid://n6444fbllu4i"]
 
+[ext_resource type="Shader" uid="uid://cw7lxh07pvkm8" path="res://Terrain/Shaders/space_skybox.gdshader" id="1_kek77"]
 [ext_resource type="Script" uid="uid://b7nhm7h3u1w8m" path="res://Gameplay/GameplaySession.cs" id="7_5vw27"]
 [ext_resource type="Script" uid="uid://b6bn264g1kbuf" path="res://Gameplay/Nodes/PlayerNode.cs" id="9_4c57u"]
 [ext_resource type="PackedScene" uid="uid://cbk7rcuv37u3c" path="res://Scenes/Player.tscn" id="9_kek77"]
 [ext_resource type="Script" uid="uid://bcbx62vyb03sy" path="res://Gameplay/Nodes/OrbitalCameraNode.cs" id="10_4c57u"]
-[ext_resource type="Shader" uid="uid://cw7lxh07pvkm8" path="res://Terrain/Shaders/sky_atmosphere.gdshader" id="13_2cqfq"]
 [ext_resource type="Script" uid="uid://d4l3avokcmrnx" path="res://Terrain/GameSession.cs" id="14_w48qg"]
 [ext_resource type="Resource" uid="uid://lhoat85msirm" path="res://Terrain/terr.tres" id="15_2cqfq"]
 [ext_resource type="Material" uid="uid://clr6ha0aoqo5i" path="res://Terrain/terrain_tiles.tres" id="16_terrain"]
 [ext_resource type="Shader" uid="uid://b1rj7otgxvek4" path="res://Terrain/Shaders/water.gdshader" id="17_074og"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_yaehf"]
-shader = ExtResource("13_2cqfq")
+shader = ExtResource("1_kek77")
 shader_parameter/sun_direction = Vector3(0.865, 1.34, 1.46)
 shader_parameter/sun_color = Color(0.99999994, 0.9884406, 0.9369151, 1)
 shader_parameter/sun_angular_radius = 0.04500000213748999
@@ -75,12 +75,12 @@ WorldEnvironment = NodePath("../WorldEnv")
 script = ExtResource("7_5vw27")
 
 [node name="Player" parent="." unique_id=73761922 instance=ExtResource("9_kek77")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1500, 89.203)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7303.052, -372.387, -432.894)
 script = ExtResource("9_4c57u")
 Speed = 90.0
 
 [node name="Camera3D" type="Camera3D" parent="." unique_id=900992571]
-far = 40000.0
+far = 50000.0
 script = ExtResource("10_4c57u")
 PlayerNodePath = NodePath("../Player")
 

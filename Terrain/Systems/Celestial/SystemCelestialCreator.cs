@@ -143,9 +143,7 @@ public class SystemCelestialCreator : BaseSystem
             {
                 Height = bodyDef.Atmosphere.Height,
                 Color = bodyDef.Atmosphere.Color,
-                Density = bodyDef.Atmosphere.Density,
-                MieScattering = bodyDef.Atmosphere.MieScattering,
-                RayleighScattering = bodyDef.Atmosphere.RayleighScattering
+                Density = bodyDef.Atmosphere.Density
             });
             celestial.AddTag<CelestialHasAtmosphere>();
         }
