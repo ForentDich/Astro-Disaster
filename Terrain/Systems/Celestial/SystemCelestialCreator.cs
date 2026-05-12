@@ -10,7 +10,7 @@ using System.IO;
 /// Pipeline position: after SystemStarCreator.
 ///
 /// Reads the first solar system from config and creates all its bodies.
-/// Each body gets: identity, geometry, transform, orbit, atmosphere, surface,
+/// Each body gets: identity, geometry, transform, orbit, surface,
 /// gravity source, and face entities.
 /// </summary>
 public class SystemCelestialCreator : BaseSystem
@@ -136,18 +136,6 @@ public class SystemCelestialCreator : BaseSystem
             AxialTilt = bodyDef.Orbit.AxialTilt
         });
 
-        // ── Atmosphere ──
-        if (bodyDef.Atmosphere.Enabled)
-        {
-            celestial.AddComponent(new AtmosphereData
-            {
-                Height = bodyDef.Atmosphere.Height,
-                Color = bodyDef.Atmosphere.Color,
-                Density = bodyDef.Atmosphere.Density
-            });
-            celestial.AddTag<CelestialHasAtmosphere>();
-        }
-
         // ── Surface ──
         celestial.AddComponent(new SurfaceData
         {
@@ -164,6 +152,9 @@ public class SystemCelestialCreator : BaseSystem
             celestial.AddTag<CelestialPlanet>();
         else if (type == CelestialType.Moon)
             celestial.AddTag<CelestialMoon>();
+
+        if (bodyDef.IsPrimary)
+            celestial.AddTag<CelestialPrimary>();
 
 
         celestial.AddComponent(new PlanetProxySettings

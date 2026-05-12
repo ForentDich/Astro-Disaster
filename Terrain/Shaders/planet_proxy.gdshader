@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode cull_back, depth_draw_opaque, diffuse_burley, specular_disabled;
+render_mode cull_back, depth_draw_always, diffuse_burley, specular_disabled;
 
 uniform vec3 player_pos = vec3(0.0, 0.0, 0.0);
 uniform float discard_radius = 250.0;
@@ -24,9 +24,9 @@ void vertex() {
 }
 
 void fragment() {
-    if (distance(v_world_pos, player_pos) < discard_radius) {
-        discard;
-    }
+    //if (distance(v_world_pos, player_pos) < discard_radius) {
+    //    discard;
+    //}
 
     // 1. Сначала считаем sid (ID поверхности)
     int sid = clamp(int(round(v_surface_id)), 0, max(surface_count - 1, 0));

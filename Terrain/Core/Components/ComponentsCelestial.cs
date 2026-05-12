@@ -55,25 +55,6 @@ public struct OrbitData : IComponent
     public float AxialTilt;
 }
 
-// ── Atmosphere ──
-
-public struct AtmosphereData : IComponent
-{
-    public float Height;
-    public Color Color;
-    public float Density;
-}
-
-/// <summary>
-/// Runtime component: holds the MeshInstance3D for the atmosphere sphere.
-/// Added by AtmosphereSystem when it creates the mesh.
-/// </summary>
-public struct AtmosphereMesh : IComponent
-{
-    public ulong InstanceId;
-    public MeshInstance3D GetMesh() => GodotObject.InstanceFromId(InstanceId) as MeshInstance3D;
-}
-
 // ── Surface ──
 
 public struct SurfaceData : IComponent

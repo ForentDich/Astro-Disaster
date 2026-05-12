@@ -14,11 +14,11 @@ public struct CelestialSun : ITag { }
 public struct CelestialMoon : ITag { }
 public struct CelestialStars : ITag { }
 public struct CelestialPlanet : ITag { }
+public struct CelestialPrimary : ITag { }
 public struct CelestialAsteroid : ITag { }
 public struct CelestialComet : ITag { }
 
 
-public struct CelestialHasAtmosphere : ITag { }
 public struct CelestialHasRings : ITag { }
 public struct CelestialHasWater : ITag { }
 

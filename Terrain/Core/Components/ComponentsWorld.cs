@@ -1,4 +1,5 @@
 using Friflo.Engine.ECS;
+using Godot;
 
 public struct WorldData : IComponent
 {
@@ -8,6 +9,12 @@ public struct WorldData : IComponent
     public string SavePath;
     public ulong CreatedAt;
     public int Version;
+}
+
+public struct WorldPlanet : IComponent
+{
+    public Vector3 Center;
+    public float Radius;
 }
 
 public struct WorldOwnsCelestial : ILinkComponent

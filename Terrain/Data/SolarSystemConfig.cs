@@ -33,14 +33,6 @@ public static class SolarSystemConfig
         public float AxialTilt;
     }
 
-    public struct AtmosphereDef
-    {
-        public bool Enabled;
-        public float Height;
-        public Color Color;
-        public float Density;
-    }
-
     public struct SurfaceDef
     {
         public int Seed;
@@ -55,7 +47,6 @@ public static class SolarSystemConfig
         public int SegmentsPerSide;
         public float Gravity;
         public OrbitDef Orbit;
-        public AtmosphereDef Atmosphere;
         public SurfaceDef Surface;
     }
 
@@ -148,10 +139,7 @@ public static class SolarSystemConfig
     private static BodyDef ParseBody(JsonElement el)
     {
         var orbitEl   = el.GetProperty("orbit");
-        var atmoEl    = el.GetProperty("atmosphere");
         var surfaceEl = el.GetProperty("surface");
-
-        var atmoColorArr = atmoEl.GetProperty("color");
 
         return new BodyDef
         {
@@ -166,13 +154,6 @@ public static class SolarSystemConfig
                 Speed        = orbitEl.GetProperty("speed").GetSingle(),
                 InitialAngle = orbitEl.GetProperty("initialAngle").GetSingle(),
                 AxialTilt    = orbitEl.GetProperty("axialTilt").GetSingle()
-            },
-            Atmosphere = new AtmosphereDef
-            {
-                Enabled            = atmoEl.GetProperty("enabled").GetBoolean(),
-                Height             = atmoEl.GetProperty("height").GetSingle(),
-                Color              = new Color(atmoColorArr[0].GetSingle(), atmoColorArr[1].GetSingle(), atmoColorArr[2].GetSingle(), atmoColorArr[3].GetSingle()),
-                Density            = atmoEl.GetProperty("density").GetSingle()
             },
             Surface = new SurfaceDef
             {

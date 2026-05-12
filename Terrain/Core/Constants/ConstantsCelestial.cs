@@ -2,11 +2,6 @@ public static class ConstantsCelestial
 {
 	public const int FACE_COUNT = 6;           
 	
-	/// <summary>
-	/// Atmosphere height above the planet surface.
-	/// </summary>
-	public const float ATMOSPHERE_HEIGHT = 100.0f;
-	
 	public const int SEA_LEVEL = 64;
 	public const int MAX_HEIGHT = 256;
 	public const int MIN_HEIGHT = 0;

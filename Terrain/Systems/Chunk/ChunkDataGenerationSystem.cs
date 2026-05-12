@@ -15,15 +15,15 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 	private int[] _selectedEntityIds;
 	private float[] _selectedDistances;
 	private int _selectedCount;
+	private Entity _world;
+	private Vector3 _planetCenter = Vector3.Zero;
+	private float _planetRadius = 1000f;
 
 	public int MaxPerFrame { get; set; } = 4;
 	public Node3D Viewer { get; set; }
 	public NoiseSettings NoiseSettings { get; set; }
 	public float HeightScale { get; set; } = 0.25f;
 	public int SeaLevelHeight { get; set; }
-
-	/// <summary>Planet position in world space. Used to offset viewer position for local-space calculations.</summary>
-	public Vector3 PlanetPosition { get; set; } = Vector3.Zero;
 
 	/// <summary>Reference to segment creator for resolving .seg destination path.</summary>
 	public SystemSegmentCreator SegmentCreator { get; set; }
@@ -50,6 +50,8 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 		if (MaxPerFrame <= 0)
 			return;
 
+		UpdateWorldPlanet();
+
 		EnsureNoiseGenerator();
 		var commandBuffer = CommandBuffer;
 
@@ -68,7 +70,7 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 		}
 
 		// Use local viewer position relative to planet for chunk coordinate selection
-		Vector3 localViewerPos = Viewer.GlobalPosition - PlanetPosition;
+		Vector3 localViewerPos = Viewer.GlobalPosition - _planetCenter;
 
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
 		_selectedCount = 0;
@@ -103,8 +105,8 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
 		if (faceOrientation.HasValue)
 		{
-			float radius = SegmentCreator != null
-				? SegmentCreator.PlanetRadius
+			float radius = _planetRadius > 0f
+				? _planetRadius
 				: ConstantsCelestial.ComputeRadius(segmentsPerSide);
 			Vector3 center = CubeSphereProjection.GetChunkCenterOnSphere(info.X, info.Z, segmentsPerSide, faceOrientation.Value, radius);
 			return center.DistanceSquaredTo(viewerLocalPos);
@@ -171,7 +173,9 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 		}
 
 		int faceResolution = CubeSphereProjection.GetFaceResolution(segmentsPerSide);
-		float planetRadius = ConstantsCelestial.ComputeRadius(segmentsPerSide);
+		float planetRadius = _planetRadius > 0f
+			? _planetRadius
+			: ConstantsCelestial.ComputeRadius(segmentsPerSide);
 
 		// Compute chunk offset in face-local coordinates
 		// info.X and info.Z are in chunk units, convert to vertex indices
@@ -221,6 +225,36 @@ public class ChunkDataGenerationSystem : QuerySystem<ChunkInfo>
 		}
 
 		return data;
+	}
+
+	private void UpdateWorldPlanet()
+	{
+		if (_store == null)
+			return;
+
+		if (_world.IsNull)
+			_world = _store.GetUniqueEntity("World");
+		if (_world.IsNull)
+			return;
+
+		if (_world.TryGetComponent<WorldPlanet>(out var worldPlanet))
+		{
+			_planetCenter = worldPlanet.Center;
+			_planetRadius = worldPlanet.Radius > 0f
+				? worldPlanet.Radius
+				: ResolveFallbackRadius();
+		}
+		else
+		{
+			_planetCenter = Vector3.Zero;
+			_planetRadius = ResolveFallbackRadius();
+		}
+	}
+
+	private float ResolveFallbackRadius()
+	{
+		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
+		return ConstantsCelestial.ComputeRadius(segmentsPerSide);
 	}
 
 	private static byte DetermineSurfaceByte(int height, int biomeIndex, int seaLevelHeight)

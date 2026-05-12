@@ -21,15 +21,15 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 	private Vector3 _lastViewerPos;
 	private bool _initialized;
 	private EntityStore _store;
+	private Entity _world;
+	private Vector3 _planetCenter = Vector3.Zero;
+	private float _planetRadius = 1000f;
 
 
 	public Node3D Viewer { get; set; }
 	public int RenderDistance { get; set; } = 5;
 	public int CollisionDistance { get; set; } = 1;
 	public int MaxPerFrame { get; set; } = 8;
-	public float PlanetRadius { get; set; } = 1000f;
-	/// <summary>World position of the planet center. Used to offset viewer position for local-space calculations.</summary>
-	public Vector3 PlanetPosition { get; set; } = Vector3.Zero;
 	/// <summary>Optional spherical load radius in world units (0 = auto from RenderDistance).</summary>
 	public float SphericalLoadRadius { get; set; } = 0f;
 
@@ -45,8 +45,10 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 	{
 		if (Viewer == null) return;
 
+		UpdateWorldPlanet();
+
 		// Convert viewer world position to planet-local coordinates
-		Vector3 viewerPos = Viewer.GlobalPosition - PlanetPosition;
+		Vector3 viewerPos = Viewer.GlobalPosition - _planetCenter;
 		bool playerMoved = !_initialized ||
 						  _lastViewerPos.DistanceSquaredTo(viewerPos) > 1.0f;
 
@@ -79,7 +81,7 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 			return false;
 
 		orientation = faceOrientation.Value;
-		Vector2 faceUV = CubeSphereProjection.WorldToFaceUV(localViewerPos, orientation, PlanetRadius);
+		Vector2 faceUV = CubeSphereProjection.WorldToFaceUV(localViewerPos, orientation, _planetRadius);
 
 		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
 		var (gridX, gridZ) = CubeSphereProjection.UVToFaceGrid(faceUV, segmentsPerSide);
@@ -204,7 +206,7 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 		int localX = ChunkConstants.CHUNK_SIZE / 2;
 		int localZ = ChunkConstants.CHUNK_SIZE / 2;
 		var (globalX, globalZ) = CubeSphereProjection.GetGlobalVertexCoords(chunkX, chunkZ, localX, localZ, segmentsPerSide);
-		return CubeSphereProjection.GetSpherePoint(globalX, globalZ, faceResolution, orientation, PlanetRadius);
+		return CubeSphereProjection.GetSpherePoint(globalX, globalZ, faceResolution, orientation, _planetRadius);
 	}
 
 	private void ProcessChunkCreation(CommandBuffer buffer)
@@ -337,7 +339,7 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 				chunkZ,
 				segmentsPerSide,
 				faceOrientation.Value,
-				PlanetRadius);
+				_planetRadius);
 			return center.DistanceSquaredTo(_lastViewerPos);
 		}
 
@@ -347,5 +349,35 @@ public class ChunkVisibilitySystem : QuerySystem<ChunkInfo>
 			0f,
 			chunkZ * ChunkConstants.CHUNK_WORLD_SIZE + half);
 		return fallbackCenter.DistanceSquaredTo(_lastViewerPos);
+	}
+
+	private void UpdateWorldPlanet()
+	{
+		if (_store == null)
+			return;
+
+		if (_world.IsNull)
+			_world = _store.GetUniqueEntity("World");
+		if (_world.IsNull)
+			return;
+
+		if (_world.TryGetComponent<WorldPlanet>(out var worldPlanet))
+		{
+			_planetCenter = worldPlanet.Center;
+			_planetRadius = worldPlanet.Radius > 0f
+				? worldPlanet.Radius
+				: ResolveFallbackRadius();
+		}
+		else
+		{
+			_planetCenter = Vector3.Zero;
+			_planetRadius = ResolveFallbackRadius();
+		}
+	}
+
+	private float ResolveFallbackRadius()
+	{
+		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
+		return ConstantsCelestial.ComputeRadius(segmentsPerSide);
 	}
 }

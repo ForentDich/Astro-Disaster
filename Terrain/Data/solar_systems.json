@@ -21,12 +21,6 @@
 		  "initialAngle": 0.0,
 		  "axialTilt": 0
 		},
-		"atmosphere": {
-		  "enabled": true,
-		  "height": 1200.0,
-		  "color": [0.4, 0.6, 1.0, 1.0],
-		  "density": 1.6
-		},
 		"surface": {
 		  "seed": 12345,
 		  "rotationSpeed": 0.0002

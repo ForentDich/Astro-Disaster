@@ -21,13 +21,13 @@ public class SystemSegmentCreator : BaseSystem
     public Node3D Viewer { get; set; }
     public int LoadRadius { get; set; } = ConstantsSegment.LOAD_RADIUS;
     public int UnloadRadius { get; set; } = ConstantsSegment.UNLOAD_RADIUS;
-    public float PlanetRadius { get; set; } = 1000f;
-    /// <summary>World position of the planet center. Used to offset viewer position for local-space calculations.</summary>
-    public Vector3 PlanetPosition { get; set; } = Vector3.Zero;
 
 
     // ── Internal state ──
     private EntityStore _store;
+    private Entity _world;
+    private Vector3 _planetCenter = Vector3.Zero;
+    private float _planetRadius = 1000f;
     private int _segmentsPerSide = 1;
 
     /// <summary>Face data per face index.</summary>
@@ -78,6 +78,8 @@ public class SystemSegmentCreator : BaseSystem
             if (_faceData.Count == 0)
                 return;
         }
+
+        UpdateWorldPlanet();
 
         // Step 2 — create / unload segments around viewer on each face
         UpdateSegmentsAroundViewer();
@@ -164,7 +166,7 @@ public class SystemSegmentCreator : BaseSystem
     private void UpdateSegmentsAroundViewer()
     {
         // Convert viewer world position to planet-local coordinates
-        Vector3 viewerPos = Viewer.GlobalPosition - PlanetPosition;
+        Vector3 viewerPos = Viewer.GlobalPosition - _planetCenter;
         int half = SegmentGridHalf;
 
         foreach (var kvp in _faceData)
@@ -173,7 +175,7 @@ public class SystemSegmentCreator : BaseSystem
             var data = kvp.Value;
 
             // Convert world position to face-local UV coordinates
-            Vector2 faceUV = CubeSphereProjection.WorldToFaceUV(viewerPos, data.Orientation, PlanetRadius);
+            Vector2 faceUV = CubeSphereProjection.WorldToFaceUV(viewerPos, data.Orientation, _planetRadius);
 
             var (gridX, gridZ) = CubeSphereProjection.UVToFaceGrid(faceUV, _segmentsPerSide);
 
@@ -232,6 +234,30 @@ public class SystemSegmentCreator : BaseSystem
 
         foreach (var pos in data.ToRemove)
             UnloadSegment(data, pos);
+    }
+
+    private void UpdateWorldPlanet()
+    {
+        if (_store == null)
+            return;
+
+        if (_world.IsNull)
+            _world = _store.GetUniqueEntity("World");
+        if (_world.IsNull)
+            return;
+
+        if (_world.TryGetComponent<WorldPlanet>(out var worldPlanet))
+        {
+            _planetCenter = worldPlanet.Center;
+            _planetRadius = worldPlanet.Radius > 0f
+                ? worldPlanet.Radius
+                : ConstantsCelestial.ComputeRadius(_segmentsPerSide);
+        }
+        else
+        {
+            _planetCenter = Vector3.Zero;
+            _planetRadius = ConstantsCelestial.ComputeRadius(_segmentsPerSide);
+        }
     }
 
     // ────────────────────── Create ──────────────────────
@@ -303,26 +329,6 @@ public class SystemSegmentCreator : BaseSystem
             h = h * 31 + segZ;
             return h & 0x7FFFFFFF;
         }
-    }
-
-    /// <summary>
-    /// Tries to find the primary planet entity in the store and returns its world position.
-    /// Returns Vector3.Zero if not found.
-    /// </summary>
-    public Vector3 TryGetPrimaryPlanetPosition()
-    {
-        if (_store == null)
-            return Vector3.Zero;
-
-        // Look for a celestial entity with CelestialPlanet tag and CelestialTransform component
-        var query = _store.Query<CelestialTransform>().AllTags(Tags.Get<CelestialPlanet>());
-        foreach (var entity in query.Entities)
-        {
-            ref var transform = ref entity.GetComponent<CelestialTransform>();
-            return transform.Position;
-        }
-
-        return Vector3.Zero;
     }
 
     /// <summary>

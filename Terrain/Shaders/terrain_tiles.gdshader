@@ -1,5 +1,5 @@
 shader_type spatial;
-render_mode depth_draw_opaque, cull_back, diffuse_burley, specular_disabled;
+render_mode depth_draw_always, cull_back, diffuse_burley, specular_disabled;
 
 group_uniforms runtime;
 uniform sampler2DArray terrain_textures : source_color, filter_nearest_mipmap, repeat_enable;

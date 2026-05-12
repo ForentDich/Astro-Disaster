@@ -188,6 +188,12 @@ public partial class GameplaySession : Node
 
 		foreach (var entity in terrainStore.Entities)
 		{
+			if (entity.Tags.Has<CelestialPrimary>())
+				return entity;
+		}
+
+		foreach (var entity in terrainStore.Entities)
+		{
 			if (entity.Tags.Has<CelestialPlanet>())
 				return entity;
 		}

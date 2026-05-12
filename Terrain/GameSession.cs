@@ -33,6 +33,7 @@ public partial class GameSession : Node
 	[Export] public DirectionalLight3D SunLight { get; set; }
 	[Export] public WorldEnvironment WorldEnvironment { get; set; }
 
+
 	[ExportGroup("World")]
 	[Export] public string WorldName { get; set; } = "MyWorld";
 	[Export] public int WorldSeed { get; set; } = 12345;
@@ -49,13 +50,10 @@ public partial class GameSession : Node
 	private ChunkCollisionBuildSystem _collisionBuildSystem;
 	private PlanetProxySystem _planetProxySystem;
 
-	private AtmosphereSystem _atmosphereSystem;
 	private ChunkVisibilitySystem _visibilitySystem;
 	private Label _biomeLabel;
 	private bool _debugVisible;
 	private int _tick;
-	private bool _planetPositionSet;
-	private Vector3 _lastSyncedPlanetPos;
 
 
 	private void SetupNoiseSettings()
@@ -81,6 +79,7 @@ public partial class GameSession : Node
 	}
 
 	private void SetupTerrainMaterial()
+
 	{
 		if (TerrainMaterial is ShaderMaterial shaderMaterial)
 		{
@@ -114,27 +113,6 @@ public partial class GameSession : Node
 		return Mathf.RoundToInt(coast * HeightScale * ConstantsCelestial.MAX_HEIGHT);
 	}
 
-	/// <summary>
-	/// Reads segmentsPerSide from the primary body in the first solar system config.
-	/// Falls back to 1 if no config is loaded.
-	/// </summary>
-	private int GetSegmentsPerSideFromConfig()
-	{
-		if (SolarSystemConfig.Count > 0)
-		{
-			var primary = SolarSystemConfig.Systems[0].GetPrimaryBody();
-			if (primary.HasValue)
-			{
-				int sps = primary.Value.SegmentsPerSide;
-				GD.Print($"[TerrainWorld] Using segmentsPerSide={sps} from config (body '{primary.Value.Name}')");
-				return sps;
-			}
-		}
-
-		GD.Print("[TerrainWorld] No config or primary body found, using segmentsPerSide=1");
-		return 1;
-	}
-
 	public override void _Ready()
 	{
 		Instance = this;
@@ -143,9 +121,8 @@ public partial class GameSession : Node
 		SetupTerrain();
 		SetupTerrainMaterial();
 
-		_store = new EntityStore();
 
-		int segmentsPerSide = GetSegmentsPerSideFromConfig();
+		_store = new EntityStore();
 
 		var worldCreator = new SystemWorldCreator
 		{
@@ -158,18 +135,13 @@ public partial class GameSession : Node
 
 		var celestialCreator = new SystemCelestialCreator();
 
-		float planetRadius = ConstantsCelestial.ComputeRadius(segmentsPerSide);
-
-		// Pre-compute planet position from config (before ECS creates the entity)
-		Vector3 initialPlanetPos = ComputePrimaryPlanetPosition();
+		var worldPlanetSync = new SystemWorldPlanetSync();
 
 		_segmentCreator = new SystemSegmentCreator
 		{
 			Viewer = Viewer,
 			LoadRadius = ConstantsSegment.LOAD_RADIUS,
-			UnloadRadius = ConstantsSegment.UNLOAD_RADIUS,
-			PlanetRadius = planetRadius,
-			PlanetPosition = initialPlanetPos
+			UnloadRadius = ConstantsSegment.UNLOAD_RADIUS
 		};
 
 		int seaLevelHeight = ComputeSeaLevelHeight();
@@ -181,8 +153,6 @@ public partial class GameSession : Node
 			CollisionDistance = CollisionDistance,
 			MaxPerFrame = MaxCreatePerFrame,
 			SegmentCreator = _segmentCreator,
-			PlanetRadius = planetRadius,
-			PlanetPosition = initialPlanetPos,
 			SphericalLoadRadius = SphericalLoadRadius
 		};
 
@@ -198,8 +168,7 @@ public partial class GameSession : Node
 			NoiseSettings = NoiseSettings,
 			HeightScale = HeightScale,
 			SegmentCreator = _segmentCreator,
-			SeaLevelHeight = seaLevelHeight,
-			PlanetPosition = initialPlanetPos
+			SeaLevelHeight = seaLevelHeight
 		};
 
 		_meshBuildSystem = new ChunkMeshBuildSystem
@@ -208,9 +177,7 @@ public partial class GameSession : Node
 			MaxPerFrame = MaxMeshBuildPerFrame,
 			TerrainMaterial = TerrainMaterial,
 			ParentNode = this,
-			SegmentCreator = _segmentCreator,
-			PlanetRadius = planetRadius,
-			PlanetPosition = initialPlanetPos
+			SegmentCreator = _segmentCreator
 		};
 
 		_collisionBuildSystem = new ChunkCollisionBuildSystem
@@ -218,9 +185,7 @@ public partial class GameSession : Node
 			Viewer = Viewer,
 			MaxPerFrame = MaxCollisionBuildPerFrame,
 			ParentNode = this,
-			SegmentCreator = _segmentCreator,
-			PlanetRadius = planetRadius,
-			PlanetPosition = initialPlanetPos
+			SegmentCreator = _segmentCreator
 		};
 
 		_planetProxySystem = new PlanetProxySystem
@@ -235,12 +200,6 @@ public partial class GameSession : Node
 				: RenderDistance * ChunkConstants.CHUNK_WORLD_SIZE
 		};
 
-		_atmosphereSystem = new AtmosphereSystem
-		{
-			Viewer = Viewer,
-			ParentNode = this
-		};
-
 		var sunDirectionSystem = new SunDirectionSystem
 		{
 			SunLight = SunLight,
@@ -253,6 +212,7 @@ public partial class GameSession : Node
 			worldCreator,
 			starCreator,
 			celestialCreator,
+			worldPlanetSync,
 			_segmentCreator,
 			_planetProxySystem,
 			_visibilitySystem,
@@ -260,66 +220,14 @@ public partial class GameSession : Node
 			_chunkDataGen,
 			_meshBuildSystem,
 			_collisionBuildSystem,
-			_atmosphereSystem,
 			sunDirectionSystem,
+			
 		};
-	}
-
-	/// <summary>
-	/// Computes the initial world position of the primary planet from config data.
-	/// This is needed BEFORE the first ECS update (before celestial entities exist).
-	/// </summary>
-	private Vector3 ComputePrimaryPlanetPosition()
-	{
-		if (SolarSystemConfig.Count > 0)
-		{
-			var primary = SolarSystemConfig.Systems[0].GetPrimaryBody();
-			if (primary.HasValue)
-			{
-				float angleRad = Mathf.DegToRad(primary.Value.Orbit.InitialAngle);
-				float dist = primary.Value.Orbit.Distance;
-				Vector3 pos = new Vector3(
-					dist * Mathf.Cos(angleRad),
-					0f,
-					dist * Mathf.Sin(angleRad)
-				);
-				GD.Print($"[TerrainWorld] Pre-computed planet position: ({pos.X:F0}, {pos.Y:F0}, {pos.Z:F0})");
-				return pos;
-			}
-		}
-		return Vector3.Zero;
 	}
 
 	public override void _Process(double delta)
 	{
 		_systems.Update(new UpdateTick((float)delta, _tick++));
-
-		// Sync planet position from ECS (in case it changed, e.g. orbit update)
-		Vector3 planetPos = _segmentCreator.TryGetPrimaryPlanetPosition();
-		if (planetPos != Vector3.Zero && planetPos != _lastSyncedPlanetPos)
-		{
-			Vector3 oldPos = _lastSyncedPlanetPos;
-			_lastSyncedPlanetPos = planetPos;
-
-			_segmentCreator.PlanetPosition = planetPos;
-			_meshBuildSystem.PlanetPosition = planetPos;
-			_collisionBuildSystem.PlanetPosition = planetPos;
-			_chunkDataGen.PlanetPosition = planetPos;
-			_visibilitySystem.PlanetPosition = planetPos;
-
-			if (!_planetPositionSet)
-			{
-				_planetPositionSet = true;
-				GD.Print($"[TerrainWorld] Planet position synced from ECS: ({planetPos.X:F0}, {planetPos.Y:F0}, {planetPos.Z:F0})");
-			}
-
-			// Update positions of all existing chunk meshes and colliders to match new planet position
-			Vector3 deltaPos = planetPos - oldPos;
-			if (deltaPos.LengthSquared() > 0.001f)
-			{
-				UpdateChunkNodePositions(deltaPos);
-			}
-		}
 
 		UpdateDebugLabel();
 	}
@@ -401,26 +309,6 @@ public partial class GameSession : Node
 			$"Эрозия: {eValue}\n" +
 			$"Биом: {biomeName}\n" +
 			$"Coords: {pos.X:F0}, {pos.Y:F0}, {pos.Z:F0}";
-	}
-
-	/// <summary>
-	/// Updates positions of all existing chunk meshes and colliders by a delta offset.
-	/// Called when the planet moves (e.g. orbit update) to keep chunk nodes in sync.
-	/// </summary>
-	private void UpdateChunkNodePositions(Vector3 deltaPos)
-	{
-		foreach (var child in GetChildren())
-		{
-			string name = child.Name;
-			if (child is MeshInstance3D meshInstance && name.Length >= 6 && name[0] == 'C' && name[1] == 'h' && name[2] == 'u' && name[3] == 'n' && name[4] == 'k' && name[5] == '_')
-			{
-				meshInstance.Position += deltaPos;
-			}
-			else if (child is StaticBody3D staticBody && name.Length >= 10 && name[0] == 'C' && name[1] == 'h' && name[2] == 'u' && name[3] == 'n' && name[4] == 'k' && name[5] == 'B' && name[6] == 'o' && name[7] == 'd' && name[8] == 'y' && name[9] == '_')
-			{
-				staticBody.Position += deltaPos;
-			}
-		}
 	}
 
 	public override void _ExitTree()

@@ -17,19 +17,17 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 	private int[] _selectedEntityIds;
 	private float[] _selectedDistances;
 	private int _selectedCount;
+	private Entity _world;
+	private Vector3 _planetCenter = Vector3.Zero;
+	private float _planetRadius = 1000f;
 
 	public int MaxPerFrame { get; set; } = 4;
 	public Node ParentNode { get; set; }
 	public Node3D Viewer { get; set; }
 
-	/// <summary>Planet position in world space. Used to offset collision bodies.</summary>
-	public Vector3 PlanetPosition { get; set; } = Vector3.Zero;
-
 	/// <summary>Reference to segment creator for face resolution and orientation.</summary>
 	public SystemSegmentCreator SegmentCreator { get; set; }
 
-	/// <summary>Planet radius for spherical projection.</summary>
-	public float PlanetRadius { get; set; } = 1000f;
 
 	public ChunkCollisionBuildSystem()
 		=> Filter.AllTags(Tags.Get<NeedsCollision, ChunkComplete>())
@@ -51,6 +49,8 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		if (ParentNode == null || MaxPerFrame <= 0)
 			return;
 
+		UpdateWorldPlanet();
+
 		BuildColliders(buffer);
 	}
 
@@ -70,7 +70,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 	{
 		// Use local viewer position relative to planet for chunk coordinate selection
 		Vector3 localViewerPos = Viewer != null
-			? Viewer.GlobalPosition - PlanetPosition
+			? Viewer.GlobalPosition - _planetCenter
 			: Vector3.Zero;
 
 		NearestChunkSelectionTool.EnsureCapacity(ref _selectedEntityIds, ref _selectedDistances, MaxPerFrame);
@@ -140,7 +140,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
 		if (faceOrientation.HasValue)
 		{
-			Vector3 center = CubeSphereProjection.GetChunkCenterOnSphere(info.X, info.Z, segmentsPerSide, faceOrientation.Value, PlanetRadius);
+			Vector3 center = CubeSphereProjection.GetChunkCenterOnSphere(info.X, info.Z, segmentsPerSide, faceOrientation.Value, _planetRadius);
 			return center.DistanceSquaredTo(viewerLocalPos);
 		}
 
@@ -194,7 +194,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		if (data == null || data.Length < ChunkConstants.CHUNK_DATA_SIZE)
 			return null;
 
-		List<Vector3> faces = BuildSphericalFaces(data, ref info, ref orientation, segmentsPerSide, PlanetRadius);
+		List<Vector3> faces = BuildSphericalFaces(data, ref info, ref orientation, segmentsPerSide, _planetRadius);
 		if (faces.Count == 0)
 			return null;
 
@@ -212,7 +212,7 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 			Name = $"ChunkBody_{info.X}_{info.Z}_F{info.FaceIndex}",
 			CollisionLayer = 1,
 			CollisionMask = 1,
-			Position = PlanetPosition // Offset to planet position in world space
+			Position = _planetCenter // Offset to planet position in world space
 		};
 
 		body.AddChild(collisionShape);
@@ -308,5 +308,35 @@ public class ChunkCollisionBuildSystem : QuerySystem<ChunkInfo, ChunkTerrain>
 		z = Math.Clamp(z, 0, vertexSize - 1);
 		int idx = ChunkConstants.HEIGHTS_OFFSET + z * vertexSize + x;
 		return data[idx];
+	}
+
+	private void UpdateWorldPlanet()
+	{
+		if (_store == null)
+			return;
+
+		if (_world.IsNull)
+			_world = _store.GetUniqueEntity("World");
+		if (_world.IsNull)
+			return;
+
+		if (_world.TryGetComponent<WorldPlanet>(out var worldPlanet))
+		{
+			_planetCenter = worldPlanet.Center;
+			_planetRadius = worldPlanet.Radius > 0f
+				? worldPlanet.Radius
+				: ResolveFallbackRadius();
+		}
+		else
+		{
+			_planetCenter = Vector3.Zero;
+			_planetRadius = ResolveFallbackRadius();
+		}
+	}
+
+	private float ResolveFallbackRadius()
+	{
+		int segmentsPerSide = SegmentCreator?.SegmentsPerSide ?? 1;
+		return ConstantsCelestial.ComputeRadius(segmentsPerSide);
 	}
 }
