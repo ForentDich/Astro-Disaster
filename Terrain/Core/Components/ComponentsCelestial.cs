@@ -69,8 +69,6 @@ public struct PlanetProxySettings : IComponent
 {
     public bool Enabled;
     public int ResolutionDiv;
-    public float InnerRadius;
-    public float OuterRadius;
     public float ProxySink;
     public float ProxyDiscardRadius;
 }

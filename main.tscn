@@ -31,7 +31,8 @@ ambient_light_energy = 0.3
 reflected_light_source = 2
 ssao_power = 16.970516
 glow_enabled = true
-glow_bloom = 0.4
+glow_bloom = 0.1
+fog_light_energy = 0.27
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_074og"]
 render_priority = 0
@@ -77,7 +78,7 @@ WorldEnvironment = NodePath("../WorldEnv")
 script = ExtResource("7_5vw27")
 
 [node name="Player" parent="." unique_id=73761922 instance=ExtResource("9_kek77")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7303.052, -372.387, -432.894)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6526.98, -1000, 0)
 script = ExtResource("9_4c57u")
 Speed = 90.0
 

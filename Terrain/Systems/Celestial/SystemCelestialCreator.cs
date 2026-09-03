@@ -161,11 +161,37 @@ public class SystemCelestialCreator : BaseSystem
         {
             Enabled = true,
             ResolutionDiv = 4,
-            InnerRadius = 0f,
-            OuterRadius = 0f,
             ProxySink = 8.0f,
             ProxyDiscardRadius = 250.0f
         });
+
+        if (type == CelestialType.Planet)
+        {
+            float atmosphereHeight = radius * 0.5f;
+            celestial.AddComponent(new AtmosphereSettings
+            {
+                AtmosphereHeight = atmosphereHeight,
+                RayleighScaleHeight = atmosphereHeight * 0.125f, // Физически точная пропорция (8км/64км)
+                MieScaleHeight = atmosphereHeight * 0.018f,     // Физически точная пропорция (1.2км/64км)
+
+                // Идеальные спектральные коэффициенты для синего неба (RGB)
+                RayleighScattering = new Vector3(0.0058f, 0.0135f, 0.0331f),
+
+                // Дымка у горизонта (белесая/серая)
+                MieScattering = new Vector3(0.004f, 0.004f, 0.004f),
+
+                // Экстинкция Ми (рассеяние + поглощение)
+                MieExtinction = new Vector3(0.0044f, 0.0044f, 0.0044f),
+
+                // Поглощение озоном (дает красивый фиолетово-синий оттенок в момент сумерек на стыке дня и ночи)
+                OzoneAbsorption = new Vector3(0.00065f, 0.00188f, 0.00008f),
+
+                MiePhaseG = 0.8f,
+                GroundAlbedo = new Vector3(0.1f, 0.1f, 0.1f), // Темная подложка, чтобы земля сильно не пересвечивала небо снизу
+                SunIntensity = 15.0f // Умеренная яркость для ACES / HDR тонокоррекции в Godot
+            });
+            celestial.AddTag<AtmosphereNeedsLuts>();
+        }
 
         celestial.AddTag<CelestialNeedsFaces>();
 
